@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Fixing Printer Offline Problems
 **KB ID:** KB0004  
 **Category:** Windows / Printers & Peripherals  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

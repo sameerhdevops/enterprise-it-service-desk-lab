@@ -1,10 +1,12 @@
 ***************************************************************************
-  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT OPERATIONS LAB
-  NOTE: Fictional learning lab data - not actual production metrics.
+  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT SERVICE DESK OPERATIONS LAB
+  NOTE: Fictional learning lab data (~25 employees) - not live production metrics.
+  Dataset Period: November 1–19, 2024 (Simulated Historical Sample)
+  Snapshot Baseline: 2024-11-19 12:00:00 IST
 ***************************************************************************
 ===========================================================================
    NEXORA TECHNOLOGIES - IT SERVICE DESK DAILY SUMMARY
-   Generated: 2026-11-12 15:40:46 IST
+   Generated: 2026-11-12 18:36:51 IST
 ===========================================================================
 Total Logged Incidents:       20
 Active Open / Backlog:        3 (15.0%)

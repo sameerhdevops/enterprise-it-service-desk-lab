@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Resolving No Internet Connectivity
 **KB ID:** KB0002  
 **Category:** Networking / LAN & Wi-Fi  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

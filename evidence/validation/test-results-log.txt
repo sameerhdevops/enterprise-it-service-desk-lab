@@ -9,13 +9,25 @@ test_04_valid_statuses (test_validation.TestServiceDeskValidation.test_04_valid_
 Verify incident statuses match defined ITIL lifecycle states. ... ok
 test_05_date_chronology (test_validation.TestServiceDeskValidation.test_05_date_chronology)
 Verify resolved date is strictly chronologically after reported date. ... ok
-test_06_report_calculations (test_validation.TestServiceDeskValidation.test_06_report_calculations)
+test_06_report_calculations_fixture (test_validation.TestServiceDeskValidation.test_06_report_calculations_fixture)
 Test calculation functions using deterministic fixture data. ... ok
 test_07_empty_data_handling (test_validation.TestServiceDeskValidation.test_07_empty_data_handling)
 Verify report generator handles empty dataset gracefully without raising exceptions. ... ok
+test_08_elapsed_duration_calculation (test_validation.TestServiceDeskValidation.test_08_elapsed_duration_calculation)
+Test elapsed hours calculation directly from timestamps. ... ok
+test_09_timestamp_mismatch_detection_live (test_validation.TestServiceDeskValidation.test_09_timestamp_mismatch_detection_live)
+Verify that every resolved incident in live CSV has matching timestamps and duration. ... ok
+test_10_sla_target_comparison (test_validation.TestServiceDeskValidation.test_10_sla_target_comparison)
+Verify SLA policy targets follow elapsed clock hours strictly. ... ok
+test_11_open_ticket_overdue_evaluation (test_validation.TestServiceDeskValidation.test_11_open_ticket_overdue_evaluation)
+Verify that all 3 open tickets are overdue at the historical snapshot time (2024-11-19 12:00 IST). ... ok
+test_12_reconciled_dataset_metrics (test_validation.TestServiceDeskValidation.test_12_reconciled_dataset_metrics)
+Verify the corrected live dataset produces exact required metrics: 267.75h total, 15.75h MTTR, 85% SLA. ... ok
+test_13_invalid_date_formats (test_validation.TestServiceDeskValidation.test_13_invalid_date_formats)
+Verify parse_iso_datetime properly handles invalid formats and empty strings. ... ok
 
 ----------------------------------------------------------------------
-Ran 7 tests in 0.034s
+Ran 13 tests in 0.028s
 
 OK
 

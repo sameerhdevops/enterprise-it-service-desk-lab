@@ -1,14 +1,14 @@
 # Enterprise IT Service Desk Lab
 
 [![Repository](https://img.shields.io/badge/GitHub-sameerhdevops%2Fenterprise--it--service--desk--lab-blue?logo=github)](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)
-[![Validation Tests](https://img.shields.io/badge/Tests-7%2F7%20Passing-brightgreen)](reporting/tests/test_validation.py)
+[![Validation Tests](https://img.shields.io/badge/Tests-13%2F13%20Passing-brightgreen)](reporting/tests/test_validation.py)
 [![Data Integrity](https://img.shields.io/badge/Datasets-Validated-brightgreen)](scripts/validate-data.py)
 [![Role](https://img.shields.io/badge/Target%20Role-IT%20Support%20Engineer%20L1-orange)]()
 
 A hands-on learning lab simulating L1 IT support operations for a small fictional company called **Nexora Technologies**. I built this to teach myself the day-to-day workflows, tools, and troubleshooting that an entry-level IT Support Engineer actually deals with — ticketing, Active Directory, networking, hardware issues, the whole stack.
 
 **Repository URL:** [https://github.com/sameerhdevops/enterprise-it-service-desk-lab](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)  
-**Author:** Sameer Kulkarni ([@sameerhdevops](https://github.com/sameerhdevops))
+**Author:** Sameer H ([@sameerhdevops](https://github.com/sameerhdevops))
 
 ## What This Is (and Isn't)
 

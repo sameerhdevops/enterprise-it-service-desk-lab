@@ -1,16 +1,18 @@
 ***************************************************************************
-  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT OPERATIONS LAB
-  NOTE: Fictional learning lab data - not actual production metrics.
+  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT SERVICE DESK OPERATIONS LAB
+  NOTE: Fictional learning lab data (~25 employees) - not live production metrics.
+  Dataset Period: November 1–19, 2024 (Simulated Historical Sample)
+  Snapshot Baseline: 2024-11-19 12:00:00 IST
 ***************************************************************************
 ===========================================================================
    NEXORA TECHNOLOGIES - INCIDENT CATEGORY ANALYSIS
 ===========================================================================
 Category          Total   Resolved  Resolve Rate   Avg Resolution 
 ---------------------------------------------------------------------------
-Hardware          5       4                80.0%       19.44 hrs
+Hardware          5       4                80.0%       25.44 hrs
 Network           5       4                80.0%        1.19 hrs
-Software          4       3                75.0%       15.50 hrs
+Software          4       3                75.0%       23.50 hrs
 Email             3       3               100.0%        7.75 hrs
 Access/Account    2       2               100.0%        0.50 hrs
-Printing          1       1               100.0%       42.50 hrs
+Printing          1       1               100.0%       66.50 hrs
 ===========================================================================

@@ -2,7 +2,7 @@
 """
 Enterprise IT Service Desk & End-User Support Operations Lab
 Service Desk Reporting and MIS Generator
-Author: Sameer Kulkarni (L1 Support Engineer)
+Author: sameerhdevops (IT Support Engineer L1 Portfolio)
 Platform: Python 3 Standard Library Only (No external dependencies)
 
 DISCLAIMER:
@@ -17,18 +17,25 @@ import os
 from datetime import datetime
 from collections import Counter, defaultdict
 
-# SLA Resolution Targets in Hours (Simulated Corporate Policy)
+# Fictional Nexora SLA Resolution Targets in Elapsed Clock Hours (Continuous 24x7 Clock)
+# These represent simulated organizational policy choices, not universal ITIL requirements.
 SLA_TARGETS_HOURS = {
-    'P1': 4.0,     # Critical: 4 hours (24x7)
-    'P2': 8.0,     # High: 8 business hours
-    'P3': 72.0,    # Medium: 3 business days (72 hours)
-    'P4': 120.0    # Low: 5 business days (120 hours)
+    'P1': 4.0,     # Critical: 4 elapsed hours (24x7 continuous clock)
+    'P2': 8.0,     # High: 8 elapsed clock hours
+    'P3': 72.0,    # Medium: 72 elapsed clock hours (3 calendar days)
+    'P4': 120.0    # Low: 120 elapsed clock hours (5 calendar days)
 }
+
+# Fixed historical snapshot time for evaluating outstanding tickets
+DATASET_SNAPSHOT_TIME = datetime(2024, 11, 19, 12, 0, 0)
+DATASET_REPORTING_PERIOD = "November 1–19, 2024 (Simulated Historical Sample)"
 
 DISCLAIMER_HEADER = [
     "*" * 75,
-    "  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT OPERATIONS LAB",
-    "  NOTE: Fictional learning lab data - not actual production metrics.",
+    "  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT SERVICE DESK OPERATIONS LAB",
+    "  NOTE: Fictional learning lab data (~25 employees) - not live production metrics.",
+    f"  Dataset Period: {DATASET_REPORTING_PERIOD}",
+    f"  Snapshot Baseline: {DATASET_SNAPSHOT_TIME.strftime('%Y-%m-%d %H:%M:%S')} IST",
     "*" * 75,
 ]
 
@@ -36,6 +43,23 @@ def resolve_path(relative_path):
     """Resolve path relative to repo root."""
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_dir, relative_path)
+
+def parse_iso_datetime(date_str):
+    """Parse string date format '%Y-%m-%d %H:%M' into datetime object."""
+    clean_str = date_str.strip()
+    if not clean_str:
+        return None
+    return datetime.strptime(clean_str, '%Y-%m-%d %H:%M')
+
+def calculate_elapsed_hours(reported_str, resolved_str):
+    """Calculate actual elapsed clock hours between two timestamps."""
+    dt_rep = parse_iso_datetime(reported_str)
+    dt_res = parse_iso_datetime(resolved_str)
+    if not dt_rep or not dt_res:
+        raise ValueError("Both reported and resolved timestamps are required to calculate duration")
+    if dt_res < dt_rep:
+        raise ValueError(f"Resolved timestamp ({resolved_str}) is earlier than reported timestamp ({reported_str})")
+    return (dt_res - dt_rep).total_seconds() / 3600.0
 
 def load_incidents(filepath=None):
     """Load and parse incidents CSV file."""
@@ -117,20 +141,20 @@ def generate_priority_report(incidents):
         "=" * 75,
         "   NEXORA TECHNOLOGIES - TICKET PRIORITY BREAKDOWN",
         "=" * 75,
-        f"{'Priority':<10}{'Severity':<15}{'Target Resolution':<22}{'Count':<8}{'Share':<8}",
+        f"{'Priority':<10}{'Severity':<14}{'Target Resolution':<32}{'Count':<8}{'Share':<8}",
         "-" * 75
     ])
     labels = {
-        'P1': ('Critical', '4 Hours'),
-        'P2': ('High', '8 Business Hours'),
-        'P3': ('Medium', '3 Business Days'),
-        'P4': ('Low', '5 Business Days')
+        'P1': ('Critical', '4 Elapsed Hours (24x7)'),
+        'P2': ('High', '8 Elapsed Clock Hours'),
+        'P3': ('Medium', '72 Elapsed Clock Hours (3 Days)'),
+        'P4': ('Low', '120 Elapsed Clock Hours (5 Days)')
     }
     for p in ['P1', 'P2', 'P3', 'P4']:
         count = priority_counts.get(p, 0)
         pct = (count / total * 100) if total else 0.0
         sev, target = labels.get(p, ('Unknown', 'N/A'))
-        lines.append(f"{p:<10}{sev:<15}{target:<22}{count:<8}{pct:>5.1f}%")
+        lines.append(f"{p:<10}{sev:<14}{target:<32}{count:<8}{pct:>5.1f}%")
     lines.append("-" * 75)
     lines.append(f"Total Evaluated Incidents: {total}")
     lines.append("=" * 75)
@@ -138,54 +162,51 @@ def generate_priority_report(incidents):
 
 def generate_sla_report(incidents):
     """
-    Generate SLA Compliance Report with strict ITIL methodology.
-    Distinguishes resolved ticket performance from in-flight backlog.
+    Generate SLA Compliance Report with strict elapsed-clock-hour methodology.
+    Distinguishes resolved ticket performance from active backlog breaches evaluated
+    against the defined historical snapshot time (2024-11-19 12:00:00 IST).
     """
     total_incidents = len(incidents)
     
-    # Priority buckets: resolved_met, resolved_breached, open_breached, open_in_flight
     p_data = defaultdict(lambda: {'total': 0, 'res_met': 0, 'res_breached': 0, 'open_breached': 0, 'open_pending': 0})
     
     for inc in incidents:
         p = inc.get('Priority', 'Unknown')
         status = inc.get('Status', 'Unknown')
-        slam = inc.get('SLAMet', '').strip().lower()
-        res_hours_str = inc.get('ResolutionTime_Hours', '').strip()
+        rep_date_str = inc.get('ReportedDate', '').strip()
+        res_date_str = inc.get('ResolvedDate', '').strip()
         
         p_data[p]['total'] += 1
         is_resolved = status in ['Resolved', 'Closed']
+        target = SLA_TARGETS_HOURS.get(p, 72.0)
         
         if is_resolved:
-            # Check numerical hours if available, otherwise check SLAMet
-            if res_hours_str:
-                try:
-                    res_hours = float(res_hours_str)
-                    target = SLA_TARGETS_HOURS.get(p, 72.0)
-                    if res_hours <= target:
-                        p_data[p]['res_met'] += 1
-                    else:
-                        p_data[p]['res_breached'] += 1
-                except ValueError:
-                    if slam in ['yes', 'true', '1']:
-                        p_data[p]['res_met'] += 1
-                    else:
-                        p_data[p]['res_breached'] += 1
+            # Calculate elapsed time directly from timestamps
+            if not rep_date_str or not res_date_str:
+                raise ValueError(f"Resolved incident {inc.get('IncidentID')} missing ReportedDate or ResolvedDate")
+            
+            elapsed_hours = calculate_elapsed_hours(rep_date_str, res_date_str)
+            if elapsed_hours <= target:
+                p_data[p]['res_met'] += 1
             else:
-                if slam in ['yes', 'true', '1']:
-                    p_data[p]['res_met'] += 1
-                else:
-                    p_data[p]['res_breached'] += 1
+                p_data[p]['res_breached'] += 1
         else:
-            # Active/Escalated/Open tickets
-            if slam in ['no', 'false', '0']:
-                p_data[p]['open_breached'] += 1
+            # Evaluate open/escalated tickets at the historical snapshot time
+            if rep_date_str:
+                dt_rep = parse_iso_datetime(rep_date_str)
+                elapsed_at_snapshot = (DATASET_SNAPSHOT_TIME - dt_rep).total_seconds() / 3600.0
+                if elapsed_at_snapshot > target:
+                    p_data[p]['open_breached'] += 1
+                else:
+                    p_data[p]['open_pending'] += 1
             else:
-                p_data[p]['open_pending'] += 1
+                p_data[p]['open_breached'] += 1
 
     lines = list(DISCLAIMER_HEADER)
     lines.extend([
         "=" * 75,
         "   NEXORA TECHNOLOGIES - SERVICE LEVEL AGREEMENT (SLA) REPORT",
+        f"   Snapshot Baseline: {DATASET_SNAPSHOT_TIME.strftime('%Y-%m-%d %H:%M:%S')} IST",
         "=" * 75,
         f"{'Priority':<10}{'Target':<10}{'Total':<7}{'Res Met':<10}{'Res Breach':<12}{'Open Breach':<13}{'Compliance %':<12}",
         "-" * 75
@@ -210,7 +231,7 @@ def generate_sla_report(incidents):
         
         target_str = f"{int(SLA_TARGETS_HOURS[p])}h"
         
-        # Overall compliance treats unresolved past-SLA tickets as breached
+        # Overall compliance treats tickets overdue at snapshot as non-compliant
         met_count = rm
         pct = (met_count / tot * 100) if tot else 100.0
         lines.append(f"{p:<10}{target_str:<10}{tot:<7}{rm:<10}{rb:<12}{ob:<13}{pct:>10.1f}%")
@@ -224,17 +245,18 @@ def generate_sla_report(incidents):
     total_resolved = tot_res_met + tot_res_brk
     res_compliance = (tot_res_met / total_resolved * 100) if total_resolved else 100.0
     lines.extend([
-        "STATISTICAL INTERPRETATION:",
-        f"  * Resolved Tickets Evaluated:         {total_resolved}",
+        "STATISTICAL INTERPRETATION & METHODOLOGY:",
+        f"  * Resolved Incidents Evaluated:        {total_resolved}",
         f"  * Resolution SLA on Resolved Tickets:  {res_compliance:.1f}% ({tot_res_met} of {total_resolved} met)",
-        f"  * Active Backlog Breaches:            {tot_opn_brk} (Tickets escalated / pending L2/L3)",
-        f"  * Total Portfolio SLA Rate:           {overall_pct:.1f}% ({tot_res_met} of {tot_all} tickets compliant)",
+        f"  * Active Backlog Breaches at Snapshot: {tot_opn_brk} of {tot_all - total_resolved} overdue (> target SLA elapsed)",
+        f"  * Overall Sample SLA Compliance Rate:  {overall_pct:.1f}% ({tot_res_met} of {tot_all} sample incidents compliant)",
+        "  * Policy Basis: Elapsed clock hours (P1: 4h, P2: 8h, P3: 72h, P4: 120h continuous)",
         "=" * 75
     ])
     return "\n".join(lines)
 
 def generate_category_report(incidents):
-    """Generate Category and Subcategory Analysis Report."""
+    """Generate Category and Subcategory Analysis Report using calculated elapsed hours."""
     cat_counts = Counter(inc.get('Category', 'Unknown') for inc in incidents)
     cat_resolved = defaultdict(int)
     cat_times = defaultdict(list)
@@ -243,12 +265,14 @@ def generate_category_report(incidents):
         c = inc.get('Category', 'Unknown')
         if inc.get('Status') in ['Resolved', 'Closed']:
             cat_resolved[c] += 1
-        res_str = inc.get('ResolutionTime_Hours', '').strip()
-        if res_str:
-            try:
-                cat_times[c].append(float(res_str))
-            except ValueError:
-                pass
+            rep_date = inc.get('ReportedDate', '').strip()
+            res_date = inc.get('ResolvedDate', '').strip()
+            if rep_date and res_date:
+                try:
+                    elapsed = calculate_elapsed_hours(rep_date, res_date)
+                    cat_times[c].append(elapsed)
+                except ValueError:
+                    pass
 
     lines = list(DISCLAIMER_HEADER)
     lines.extend([
@@ -279,17 +303,21 @@ def generate_weekly_mis(incidents, service_requests=None):
     group_counts = Counter(inc.get('AssignmentGroup', 'Unassigned') for inc in incidents)
     dept_counts = Counter(inc.get('Department', 'General') for inc in incidents)
     
-    # Calculate Mean Time to Resolve (MTTR) strictly over resolved incidents
+    # Calculate Mean Time to Resolve (MTTR) strictly from actual elapsed hours
     res_times = []
     for inc in incidents:
         if inc.get('Status') in ['Resolved', 'Closed']:
-            val = inc.get('ResolutionTime_Hours', '').strip()
-            if val:
+            rep_date = inc.get('ReportedDate', '').strip()
+            res_date = inc.get('ResolvedDate', '').strip()
+            if rep_date and res_date:
                 try:
-                    res_times.append(float(val))
+                    elapsed = calculate_elapsed_hours(rep_date, res_date)
+                    res_times.append(elapsed)
                 except ValueError:
                     pass
-    avg_res_time = (sum(res_times) / len(res_times)) if res_times else 0.0
+    
+    total_res_hours = sum(res_times)
+    avg_res_time = (total_res_hours / len(res_times)) if res_times else 0.0
     
     # Escalation and L1 Resolution metrics (Non-Escalated)
     escalated_count = sum(1 for inc in incidents if inc.get('Status') == 'Escalated' or inc.get('EscalatedTo', '').strip() not in ['', '—', '-'])
@@ -299,13 +327,16 @@ def generate_weekly_mis(incidents, service_requests=None):
     lines = list(DISCLAIMER_HEADER)
     lines.extend([
         "=" * 75,
-        "   NEXORA TECHNOLOGIES - WEEKLY IT SERVICE DESK MIS REPORT",
-        f"   Reporting Period: November 2024 (Consolidated Month-End)",
+        "   NEXORA TECHNOLOGIES - IT SERVICE DESK MIS REPORT",
+        f"   Reporting Period: {DATASET_REPORTING_PERIOD}",
+        f"   Snapshot Baseline: {DATASET_SNAPSHOT_TIME.strftime('%Y-%m-%d %H:%M:%S')} IST",
+        f"   Generated At: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} IST",
         "=" * 75,
         "EXECUTIVE SUMMARY:",
         f"  Total IT Interactions Logged:      {total_inc + total_sr}",
         f"  Total Incident Tickets:            {total_inc}",
         f"  Total Service Requests:            {total_sr}",
+        f"  Total Elapsed Resolution Hours:    {total_res_hours:.2f} hours",
         f"  Mean Time to Resolve (MTTR):       {avg_res_time:.2f} hours (Over {len(res_times)} resolved incidents)",
         f"  L1 Resolution Rate (Non-Escalated):{l1_res_rate:.1f}% ({l1_resolved_count} resolved at L1 without escalation)",
         f"  Total Escalated to L2/L3:          {escalated_count} ({(escalated_count/total_inc*100 if total_inc else 0.0):.1f}%)",

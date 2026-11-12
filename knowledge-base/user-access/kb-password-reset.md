@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Employee Account Password Reset Procedure
 **KB ID:** KB0007  
 **Category:** User Access / Active Directory  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

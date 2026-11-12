@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Troubleshooting Shared Folder Access Denied
 **KB ID:** KB0010  
 **Category:** User Access / Network Shares  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

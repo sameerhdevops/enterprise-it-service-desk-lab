@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """
 Unit Test Suite for Service Desk Data Validation and Reporting
-Author: Sameer Kulkarni (L1 Support Engineer)
+Author: sameerhdevops (IT Support Engineer L1 Portfolio)
 Framework: unittest (Python 3 Standard Library)
+Tests cover:
+- CSV parsing and integrity
+- Timestamp reconciliation and duration calculation
+- SLA target comparison (elapsed clock hours)
+- Historical snapshot overdue evaluation
+- MTTR and sample SLA calculations
+- Error handling (empty data, invalid dates, priority values)
 """
 
 import unittest
@@ -17,11 +24,10 @@ spec = importlib.util.spec_from_file_location("report_generator", script_path)
 report_generator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(report_generator)
 
-# Sample embedded test fixtures to test calculations independently of external files
-SAMPLE_VALID_DATA = [
+SAMPLE_FIXTURE_DATA = [
     {
         'IncidentID': 'INC9001',
-        'Title': 'Test Laptop issue',
+        'Title': 'Test Critical Outage',
         'ReportedBy': 'Test User',
         'Department': 'HR',
         'Category': 'Hardware',
@@ -30,7 +36,7 @@ SAMPLE_VALID_DATA = [
         'Impact': '1-High',
         'Urgency': '1-High',
         'Status': 'Resolved',
-        'AssignedTo': 'Sameer K',
+        'AssignedTo': 'Nexora L1 Support Agent',
         'AssignmentGroup': 'L1 Service Desk',
         'ReportedDate': '2024-11-01 09:00',
         'ResolvedDate': '2024-11-01 11:30',
@@ -43,7 +49,7 @@ SAMPLE_VALID_DATA = [
     },
     {
         'IncidentID': 'INC9002',
-        'Title': 'Test Network slow',
+        'Title': 'Test Network Degraded',
         'ReportedBy': 'Test User 2',
         'Department': 'Finance',
         'Category': 'Network',
@@ -52,7 +58,7 @@ SAMPLE_VALID_DATA = [
         'Impact': '2-Medium',
         'Urgency': '1-High',
         'Status': 'Escalated',
-        'AssignedTo': 'Sameer K',
+        'AssignedTo': 'Nexora L1 Support Agent',
         'AssignmentGroup': 'L1 Service Desk',
         'ReportedDate': '2024-11-01 10:00',
         'ResolvedDate': '',
@@ -71,7 +77,7 @@ class TestServiceDeskValidation(unittest.TestCase):
         """Verify real incident-register.csv can be parsed and has expected columns."""
         incidents = report_generator.load_incidents()
         self.assertGreater(len(incidents), 0, "Incident register should contain rows")
-        expected_cols = {'IncidentID', 'Title', 'Priority', 'Status', 'Category', 'ReportedDate'}
+        expected_cols = {'IncidentID', 'Title', 'Priority', 'Status', 'Category', 'ReportedDate', 'ResolvedDate', 'ResolutionTime_Hours'}
         first_row = incidents[0]
         for col in expected_cols:
             self.assertIn(col, first_row, f"Required column {col} missing from CSV")
@@ -108,16 +114,16 @@ class TestServiceDeskValidation(unittest.TestCase):
                 dt_res = datetime.strptime(res_date, '%Y-%m-%d %H:%M')
                 self.assertGreaterEqual(dt_res, dt_rep, f"ResolvedDate {res_date} is earlier than ReportedDate {rep_date} in {inc['IncidentID']}")
 
-    def test_06_report_calculations(self):
+    def test_06_report_calculations_fixture(self):
         """Test calculation functions using deterministic fixture data."""
-        summary = report_generator.generate_daily_summary(SAMPLE_VALID_DATA)
+        summary = report_generator.generate_daily_summary(SAMPLE_FIXTURE_DATA)
         self.assertIn("Total Logged Incidents:       2", summary)
         self.assertIn("Active Open / Backlog:        1", summary)
         self.assertIn("Resolved Incidents:           1", summary)
         
-        sla_rep = report_generator.generate_sla_report(SAMPLE_VALID_DATA)
+        sla_rep = report_generator.generate_sla_report(SAMPLE_FIXTURE_DATA)
         self.assertIn("P1", sla_rep)
-        self.assertIn("50.0%", sla_rep)  # 1 of 2 met overall
+        self.assertIn("50.0%", sla_rep)  # 1 of 2 compliant overall
 
     def test_07_empty_data_handling(self):
         """Verify report generator handles empty dataset gracefully without raising exceptions."""
@@ -132,6 +138,83 @@ class TestServiceDeskValidation(unittest.TestCase):
             self.assertIn("Total Evaluated Incidents: 0", priority)
         except Exception as e:
             self.fail(f"Report generation on empty data crashed with exception: {e}")
+
+    def test_08_elapsed_duration_calculation(self):
+        """Test elapsed hours calculation directly from timestamps."""
+        # 2.5 hours test
+        h1 = report_generator.calculate_elapsed_hours("2024-11-01 09:00", "2024-11-01 11:30")
+        self.assertAlmostEqual(h1, 2.5, places=2)
+        
+        # 66.5 hours test (INC0005 corrected duration)
+        h2 = report_generator.calculate_elapsed_hours("2024-11-04 15:30", "2024-11-07 10:00")
+        self.assertAlmostEqual(h2, 66.5, places=2)
+        
+        # Chronology validation
+        with self.assertRaises(ValueError):
+            report_generator.calculate_elapsed_hours("2024-11-05 12:00", "2024-11-05 10:00")
+
+    def test_09_timestamp_mismatch_detection_live(self):
+        """Verify that every resolved incident in live CSV has matching timestamps and duration."""
+        incidents = report_generator.load_incidents()
+        for inc in incidents:
+            if inc.get('Status') in ['Resolved', 'Closed']:
+                rep = inc['ReportedDate']
+                res = inc['ResolvedDate']
+                csv_hours = float(inc['ResolutionTime_Hours'])
+                calc_hours = report_generator.calculate_elapsed_hours(rep, res)
+                self.assertAlmostEqual(csv_hours, calc_hours, places=2,
+                                       msg=f"Mismatch in {inc['IncidentID']}: CSV={csv_hours}, Calculated={calc_hours}")
+
+    def test_10_sla_target_comparison(self):
+        """Verify SLA policy targets follow elapsed clock hours strictly."""
+        targets = report_generator.SLA_TARGETS_HOURS
+        self.assertEqual(targets['P1'], 4.0, "P1 must be 4 elapsed hours")
+        self.assertEqual(targets['P2'], 8.0, "P2 must be 8 elapsed hours")
+        self.assertEqual(targets['P3'], 72.0, "P3 must be 72 elapsed hours (3 calendar days)")
+        self.assertEqual(targets['P4'], 120.0, "P4 must be 120 elapsed hours (5 calendar days)")
+
+    def test_11_open_ticket_overdue_evaluation(self):
+        """Verify that all 3 open tickets are overdue at the historical snapshot time (2024-11-19 12:00 IST)."""
+        incidents = report_generator.load_incidents()
+        snapshot = report_generator.DATASET_SNAPSHOT_TIME
+        open_tickets = [inc for inc in incidents if inc.get('Status') not in ['Resolved', 'Closed']]
+        
+        self.assertEqual(len(open_tickets), 3, "Expected exactly 3 open tickets in dataset")
+        for inc in open_tickets:
+            dt_rep = report_generator.parse_iso_datetime(inc['ReportedDate'])
+            elapsed_at_snap = (snapshot - dt_rep).total_seconds() / 3600.0
+            target = report_generator.SLA_TARGETS_HOURS[inc['Priority']]
+            self.assertGreater(elapsed_at_snap, target,
+                               f"Open ticket {inc['IncidentID']} should be overdue at snapshot {snapshot}")
+
+    def test_12_reconciled_dataset_metrics(self):
+        """Verify the corrected live dataset produces exact required metrics: 267.75h total, 15.75h MTTR, 85% SLA."""
+        incidents = report_generator.load_incidents()
+        resolved = [inc for inc in incidents if inc.get('Status') in ['Resolved', 'Closed']]
+        
+        self.assertEqual(len(resolved), 17, "Expected exactly 17 resolved incidents")
+        total_hours = sum(report_generator.calculate_elapsed_hours(inc['ReportedDate'], inc['ResolvedDate']) for inc in resolved)
+        self.assertAlmostEqual(total_hours, 267.75, places=2, msg="Total resolution hours must equal 267.75")
+        
+        mttr = total_hours / len(resolved)
+        self.assertAlmostEqual(mttr, 15.75, places=2, msg="MTTR must equal 15.75 hours")
+        
+        # Verify 100% SLA on resolved
+        met_count = sum(1 for inc in resolved if report_generator.calculate_elapsed_hours(inc['ReportedDate'], inc['ResolvedDate']) <= report_generator.SLA_TARGETS_HOURS[inc['Priority']])
+        self.assertEqual(met_count, 17, "All 17 resolved tickets must meet SLA")
+        
+        # Verify 85% sample SLA (17 of 20 compliant)
+        sample_sla_pct = (met_count / len(incidents)) * 100.0
+        self.assertAlmostEqual(sample_sla_pct, 85.0, places=1, msg="Overall sample SLA compliance must equal 85.0%")
+
+    def test_13_invalid_date_formats(self):
+        """Verify parse_iso_datetime properly handles invalid formats and empty strings."""
+        self.assertIsNone(report_generator.parse_iso_datetime(""))
+        self.assertIsNone(report_generator.parse_iso_datetime("   "))
+        with self.assertRaises(ValueError):
+            report_generator.parse_iso_datetime("2024/11/01 10:00")
+        with self.assertRaises(ValueError):
+            report_generator.parse_iso_datetime("InvalidDateString")
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

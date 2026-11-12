@@ -25,7 +25,7 @@
 > *Next Step: We have backed up the user's un-synced desktop files to a secured flash drive and issued spare loaner laptop `NXT-AST-014`. Please schedule SSD replacement and re-imaging.*  
 >  
 > *Thanks,*  
-> *Sameer Kulkarni (L1 Support)*
+> *Nexora L1 Support Agent*
 
 ---
 
@@ -49,7 +49,7 @@
 > *User is currently working via the TCP workaround. Please review firewall session logs for user `dramesh`.*  
 >  
 > *Thanks,*  
-> *Sameer Kulkarni (L1 Support)*
+> *Nexora L1 Support Agent*
 
 ---
 
@@ -72,7 +72,7 @@
 > *Action Requested: Basis team to apply updated permanent SAP NetWeaver license key via transaction `SLICENSE`.*  
 >  
 > *Regards,*  
-> *Sameer Kulkarni | L1 IT Service Desk*
+> *Nexora L1 Support Agent | IT Service Desk*
 
 ---
 
@@ -103,5 +103,5 @@
 > *Next Management Update: 11:45 AM IST (or upon transceiver replacement).*  
 >  
 > *Sincerely,*  
-> *Sameer Kulkarni (L1 Lead Triage)*  
+> *Nexora L1 Support Agent (Triage)*  
 > *IT Service Desk | Nexora Technologies*

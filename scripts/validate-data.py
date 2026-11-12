@@ -3,18 +3,27 @@
 Enterprise IT Service Desk & End-User Support Operations Lab
 Data Integrity & Quality Assurance Validator
 Validates all CSV dataset files in incidents/ and asset-management/
+Performs strict timestamp reconciliation and mathematical duration audits.
+Author: sameerhdevops
 """
 
 import csv
 import os
 import sys
+from datetime import datetime
+
+def parse_dt(dt_str):
+    clean = dt_str.strip()
+    if not clean:
+        return None
+    return datetime.strptime(clean, '%Y-%m-%d %H:%M')
 
 def validate_csv(filepath, required_cols, id_col):
     errors = []
     warnings = []
     
     if not os.path.exists(filepath):
-        return [f"File not found: {filepath}"], []
+        return [f"File not found: {filepath}"], [], 0
         
     seen_ids = set()
     row_count = 0
@@ -45,6 +54,45 @@ def validate_csv(filepath, required_cols, id_col):
                 if not val and col not in ['ResolvedDate', 'ResolutionTime_Hours', 'EscalatedTo', 'ImplementedDate', 'FulfilledDate', 'Notes']:
                     warnings.append(f"Row {idx} ({record_id}): Blank value in column '{col}'")
                     
+            # Strict timestamp reconciliation for incident-register.csv
+            if 'incident-register' in filepath:
+                status = row.get('Status', '').strip()
+                rep_str = row.get('ReportedDate', '').strip()
+                res_str = row.get('ResolvedDate', '').strip()
+                dur_str = row.get('ResolutionTime_Hours', '').strip()
+                
+                if rep_str:
+                    try:
+                        dt_rep = parse_dt(rep_str)
+                    except ValueError:
+                        errors.append(f"Row {idx} ({record_id}): Invalid ReportedDate format '{rep_str}'")
+                        dt_rep = None
+                else:
+                    errors.append(f"Row {idx} ({record_id}): Missing ReportedDate")
+                    dt_rep = None
+                    
+                if status in ['Resolved', 'Closed']:
+                    if not res_str:
+                        errors.append(f"Row {idx} ({record_id}): Resolved incident missing ResolvedDate")
+                    else:
+                        try:
+                            dt_res = parse_dt(res_str)
+                            if dt_rep and dt_res < dt_rep:
+                                errors.append(f"Row {idx} ({record_id}): ResolvedDate earlier than ReportedDate")
+                            elif dt_rep and dt_res and dur_str:
+                                elapsed = (dt_res - dt_rep).total_seconds() / 3600.0
+                                try:
+                                    dur_val = float(dur_str)
+                                    if abs(elapsed - dur_val) > 0.01:
+                                        errors.append(f"Row {idx} ({record_id}): Duration mismatch! CSV={dur_val}h, Elapsed={elapsed:.2f}h")
+                                except ValueError:
+                                    errors.append(f"Row {idx} ({record_id}): Non-numeric ResolutionTime_Hours '{dur_str}'")
+                        except ValueError:
+                            errors.append(f"Row {idx} ({record_id}): Invalid ResolvedDate format '{res_str}'")
+                elif status in ['New', 'InProgress', 'Escalated', 'OnHold']:
+                    if res_str or dur_str:
+                        warnings.append(f"Row {idx} ({record_id}): Open incident has ResolvedDate or duration populated")
+                        
     return errors, warnings, row_count
 
 def main():
@@ -78,7 +126,7 @@ def main():
             total_errors += len(errors)
             
         if warnings:
-            for w in warnings[:3]:  # print first 3 warnings
+            for w in warnings[:3]:
                 print(f"   [WARN] {w}")
             if len(warnings) > 3:
                 print(f"   [WARN] ... and {len(warnings) - 3} more warnings")

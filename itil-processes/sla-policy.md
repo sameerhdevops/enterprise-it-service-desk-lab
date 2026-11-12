@@ -31,17 +31,21 @@ This SLA covers all IT support services delivered by the L1 Service Desk team, i
 
 **Out of scope:** Application development, business process changes, third-party vendor management (covered by separate OLAs).
 
-## 3. Service Hours
+## 3. Service Hours & SLA Measurement Policy
 
-| Service Level | Hours | Coverage |
-|--------------|-------|----------|
-| Standard Support | Monday – Friday, 09:00 – 18:00 IST | All priorities |
-| Extended Support | Monday – Friday, 08:00 – 20:00 IST | P1 and P2 only |
-| On-Call (Emergency) | 24/7 | P1 only |
+> **Lab Policy Note (Elapsed Clock Hours):**  
+> For the Nexora Technologies learning lab and reporting dataset, all SLA targets are tracked using **elapsed clock hours** (continuous 24x7 elapsed time from ticket creation to resolution). This provides an unambiguous, mathematically reproducible evaluation across all incidents and reports:
+> - **P1 — Critical:** 4 elapsed hours (24x7 continuous clock)
+> - **P2 — High:** 8 elapsed clock hours
+> - **P3 — Medium:** 72 elapsed clock hours (3 calendar days) — *Note: explicitly measured as 72 elapsed hours, not 3 business days*
+> - **P4 — Low:** 120 elapsed clock hours (5 calendar days) — *Note: explicitly measured as 120 elapsed hours, not 5 business days*
+> 
+> These targets represent fictional Nexora organizational policy choices designed for straightforward laboratory calculation, not universal ITIL requirements.
 
-**Business day** = Monday through Friday, excluding Nexora-observed public holidays.
-
-SLA clocks run only during applicable service hours unless otherwise noted for P1 incidents, which use 24/7 clock.
+| Service Level | Description | Applied SLA Clock |
+|---|---|---|
+| Standard Support | Operational Service Desk (Monday – Friday, 09:00 – 18:00 IST) | Elapsed Clock Hours (All priorities) |
+| On-Call Escalation | Emergency Tier 2/3 Escalations (24/7) | Elapsed Clock Hours (P1 / Critical) |
 
 ## 4. Priority Definitions
 
@@ -73,12 +77,12 @@ Priority is determined by the combination of **Impact** and **Urgency**, using t
 
 ## 5. Service Level Targets — Incidents
 
-| Priority | Response Time | Resolution Time | SLA Clock |
-|----------|--------------|-----------------|-----------|
-| **P1 — Critical** | 15 minutes | 4 hours | 24/7 |
-| **P2 — High** | 1 hour | 8 hours | Extended support hours |
-| **P3 — Medium** | 4 hours | 3 business days | Standard support hours |
-| **P4 — Low** | 1 business day | 5 business days | Standard support hours |
+| Priority | Response Target | Resolution Target (Elapsed Clock Hours) | Measurement Scope |
+|---|---|---|---|
+| **P1 — Critical** | 15 minutes | 4 elapsed hours | 24x7 Continuous Clock |
+| **P2 — High** | 1 hour | 8 elapsed clock hours | Continuous Clock |
+| **P3 — Medium** | 4 hours | 72 elapsed clock hours (3 calendar days) | Continuous Clock |
+| **P4 — Low** | 24 hours | 120 elapsed clock hours (5 calendar days) | Continuous Clock |
 
 ### 5.1 Response Time — Definition
 

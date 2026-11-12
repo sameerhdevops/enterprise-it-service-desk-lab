@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Resolving Microsoft Teams Audio & Microphone Issues
 **KB ID:** KB0006  
 **Category:** Microsoft 365 / Teams  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

@@ -7,19 +7,19 @@
 
 ## 1. How DHCP Works: The DORA Process
 
-When an employee connects their laptop to the office Ethernet or Wi-Fi, it negotiates an IP configuration through the 4-step **DORA** sequence:
+When an employee connects their laptop to the office Ethernet or Wi-Fi, it negotiates an IP configuration through the 4-step **DORA** sequence. DHCPv4 operates over UDP: **Server listens on UDP port 67**, and **Client listens on UDP port 68**.
 
 ```
-Client (Unconfigured)                                           DHCP Server (NEX-DC01)
-         │                                                                │
-         ├─── [D] Discover (Broadcast: 255.255.255.255, UDP 67) ─────────>│  "Is there a DHCP server?"
-         │                                                                │
-         │<── [O] Offer (Unicast/Broadcast, IP: 192.168.10.45) ───────────┤  "Here is an available IP"
-         │                                                                │
-         ├─── [R] Request (Broadcast: "I accept 192.168.10.45") ─────────>│  "I would like to lease this IP"
-         │                                                                │
-         │<── [A] Acknowledge (Final lease parameters & options) ─────────┤  "Leased! Gateway: .1, DNS: .10"
-         │                                                                │
+Client (Port 68)                                                DHCP Server (Port 67)
+       │                                                                │
+       ├─── [D] Discover (Src: 0.0.0.0:68, Dst: 255.255.255.255:67) ───>│  "Is there a DHCP server?"
+       │                                                                │
+       │<── [O] Offer (Src: ServerIP:67, Dst: 255.255.255.255:68) ──────┤  "Here is an available IP"
+       │                                                                │
+       ├─── [R] Request (Src: 0.0.0.0:68, Dst: 255.255.255.255:67) ────>│  "I would like to lease this IP"
+       │                                                                │
+       │<── [A] Acknowledge (Src: ServerIP:67, Dst: Port 68) ───────────┤  "Leased! Gateway: .1, DNS: .10"
+       │                                                                │
 ```
 
 ### Essential DHCP Options Delivered to Client:
@@ -37,12 +37,13 @@ When a Windows client sends a DHCP Discover broadcast but receives **NO response
   **`169.254.0.1` to `169.254.255.254`** with subnet mask `255.255.0.0` (RFC 3927).
 
 ### What Seeing 169.254.x.x Means to an L1 Engineer:
-- **The physical cable and network card are working** (Windows detected a link state).
-- **The client cannot reach or hear from a DHCP server.**
-- **Possible reasons:**
-  - DHCP server service is stopped or DHCP scope is 100% full (exhausted).
-  - Client switch port is in an unrouted VLAN that lacks a `dhcp-relay` / `ip helper-address`.
-  - Corporate 802.1X port authentication failed or guest network block is active.
+- **Physical Link Detected:** The physical network adapter is enabled and detected an electrical/optical link state.
+- **DHCP Negotiation Failed:** The client did not receive a `DHCPOFFER` response.
+- **Comprehensive Troubleshooting Checklist (Do Not Assume Server is Down):**
+  - **Local Client:** Damaged patch cable, faulty NIC hardware, corrupted network adapter driver, or the Windows `DHCP Client` service stopped/disabled.
+  - **Local Switching / VLAN:** The switch port is untagged or assigned to an unrouted/isolated VLAN, 802.1X port security authentication failed, or MAC filtering is active on the switch.
+  - **Infrastructure / Relay:** The DHCP scope on the server is exhausted (100% leased), the DHCP Server service is stopped, or the router's DHCP Relay Agent (`ip helper-address`) is misconfigured or failing to forward broadcasts across subnets.
+  - **Host Security:** Local endpoint firewall or antivirus software blocking inbound/outbound UDP broadcast traffic on ports 67/68.
 
 ---
 

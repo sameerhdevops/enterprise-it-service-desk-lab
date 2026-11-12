@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Investigating & Resolving Application Crashes
 **KB ID:** KB0012  
 **Category:** Windows / Applications  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

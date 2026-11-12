@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Resolving Windows Update Failures
 **KB ID:** KB0011  
 **Category:** Windows / Operating System  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

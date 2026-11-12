@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Diagnosing & Resolving DNS Resolution Failures
 **KB ID:** KB0003  
 **Category:** Networking / DNS  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

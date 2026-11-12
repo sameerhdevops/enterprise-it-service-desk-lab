@@ -1,7 +1,7 @@
 # IT Service Desk Shift Handover Report (Completed Example)
 **Date:** 2024-11-12  
-**Outgoing Shift:** Morning Shift (08:30 – 17:30 IST) | **Analyst:** Sameer Kulkarni (L1)  
-**Incoming Shift:** Evening Shift (13:30 – 22:30 IST) | **Analyst:** Priya Sharma (L1)  
+**Outgoing Shift:** Morning Shift (08:30 – 17:30 IST) | **Analyst:** Alex Chen (L1 Service Desk Analyst)  
+**Incoming Shift:** Evening Shift (13:30 – 22:30 IST) | **Analyst:** Priya Sharma (L1 Service Desk Analyst)  
 **Handover Time:** 17:15 IST  
 
 ---

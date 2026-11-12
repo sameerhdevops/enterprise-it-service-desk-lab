@@ -43,7 +43,7 @@ To help us isolate the exact cause and resolve this quickly, could you please pr
 Once we receive this information, we will proceed with the appropriate corrective steps. Thank you for your cooperation!
 
 Best regards,  
-**Sameer Kulkarni** | L1 IT Support Engineer  
+**Nexora L1 Support Agent** | L1 IT Support Engineer  
 Nexora Technologies Service Desk
 
 ---
@@ -64,7 +64,7 @@ In the meantime, we have prepared a temporary loaner laptop (`NXT-AST-015`) pre-
 We will provide another update as soon as the technician completes the repair.
 
 Best regards,  
-**Sameer Kulkarni** | L1 IT Support Engineer  
+**Nexora L1 Support Agent** | L1 IT Support Engineer  
 Nexora Technologies Service Desk
 
 ---
@@ -108,7 +108,7 @@ Please test your applications and confirm that everything is functioning to your
 Thank you for working with the IT Service Desk!
 
 Kind regards,  
-**Sameer Kulkarni** | L1 IT Support Engineer  
+**Nexora L1 Support Agent** | L1 IT Support Engineer  
 Nexora Technologies Service Desk
 
 ---
@@ -191,5 +191,5 @@ The IT Service Desk is located on Floor 2 (IT Operations Room). You can reach us
 Wishing you a fantastic start at Nexora!
 
 Warm regards,  
-**Sameer Kulkarni** | L1 IT Support Engineer  
+**Nexora L1 Support Agent** | L1 IT Support Engineer  
 Nexora Technologies Service Desk

@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Troubleshooting Slow Windows Workstation
 **KB ID:** KB0001  
 **Category:** Windows / Performance  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

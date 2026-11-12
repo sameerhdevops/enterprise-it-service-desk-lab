@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Remote Worker VPN Troubleshooting
 **KB ID:** KB0008  
 **Category:** Networking / Remote Access  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---

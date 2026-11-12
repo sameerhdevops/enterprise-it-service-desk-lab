@@ -35,7 +35,7 @@ In Nexora Technologies, private IPv4 addressing follows RFC 1918 standards:
 | Address Class | RFC 1918 Private Range | Subnet Mask | Nexora Usage |
 |---|---|---|---|
 | **Class A** | `10.0.0.0` - `10.255.255.255` | `/8` (`255.0.0.0`) | Data center, cloud VPCs |
-| **Class B** | `172.16.0.0` - `172.31.255.255` | `/16` (`255.240.0.0`) | Branch offices, VPN pools |
+| **Class B** | `172.16.0.0` - `172.31.255.255` | `/12` (`255.240.0.0`) | Branch offices, VPN pools |
 | **Class C** | `192.168.0.0` - `192.168.255.255` | `/24` (`255.255.255.0`) | Local Bengaluru Office LANs |
 
 ### Understanding the Subnet Mask

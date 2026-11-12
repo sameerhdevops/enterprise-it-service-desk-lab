@@ -35,7 +35,7 @@ Check system uptime:
 ```powershell
 Get-CimInstance Win32_OperatingSystem | Select-Object LastBootUpTime, @{N="UptimeDays";E={[math]::Round(((Get-Date) - $_.LastBootUpTime).TotalDays, 1)}}
 ```
-*Interpretation:* If `UptimeDays` is > 14 days, the system has not experienced a cold restart. In Windows 10/11, Fast Startup closes user-mode applications but hibernates the Windows Kernel (Session 0) and system drivers to `hiberfil.sys`. As a result, kernel session uptime accumulates across shutdowns, and any corrupted device driver states or kernel-mode memory leaks (Paged/Non-Paged pool) persist. Furthermore, users frequently put laptops to sleep rather than shutting down, allowing user-mode application memory leaks to accumulate. A clean restart (`shutdown /r /t 0`) completely tears down Session 0 and clears both kernel and user memory.
+*Interpretation:* If `UptimeDays` is > 14 days, the system has not experienced a cold restart. In Windows 10/11, Fast Startup (hybrid boot) logs off user sessions but hibernates the OS kernel session and system drivers to `hiberfil.sys`. As a result, kernel session uptime accumulates across shutdowns, and any corrupted device driver states or kernel-mode pool leaks (Paged/Non-Paged pool) persist. Note: high uptime by itself does not automatically equal a memory leak, but it indicates accumulated operational state. Furthermore, users frequently put laptops to sleep rather than shutting down, which can preserve user-mode application memory leaks. A clean restart (`shutdown /r /t 0` or Start > Restart) completely tears down both the kernel and user sessions.
 
 Inspect top resource-consuming processes:
 ```powershell
@@ -54,14 +54,14 @@ Get-PSDrive C | Select-Object Name, @{N="FreeGB";E={[math]::Round($_.Free/1GB,2)
 - Problem state: Disk utilization pegged at 100% with low transfer speeds (failing drive or intense background indexing), or RAM at 95%+ with heavy paging.
 
 ### 8. Possible Root Causes
-1. **Prolonged Uptime / Kernel Degradation:** Windows Fast Startup hibernating Session 0 and preserving corrupted driver states or kernel pool leaks across power cycles, combined with persistent sleep cycles preserving user-mode memory leaks.
+1. **Prolonged Uptime / Kernel Session Degradation:** Windows Fast Startup hibernating the kernel session and device drivers across shutdowns, preserving corrupted driver states or non-paged memory pool leaks, combined with persistent sleep cycles preserving user-mode process leaks.
 2. **Excessive Startup Programs:** Multiple unneeded background utilities launching upon user logon.
 3. **Storage Exhaustion:** System drive C: has < 10% free space, preventing virtual memory paging file (`pagefile.sys`) expansion.
-4. **Thermal Throttling:** Clogged cooling vents or failed thermal paste forcing the CPU multiplier down to 0.79 GHz.
+4. **Thermal Throttling:** Clogged cooling vents or degraded thermal interface forcing the CPU multiplier down (e.g. to 0.79 GHz).
 5. **Background Update or Antivirus Scan:** Windows Update (`TiWorker.exe`) or Defender full scan executing during working hours.
 
 ### 9. Corrective Action
-1. If uptime is high, perform a full kernel-and-session restart: `shutdown /r /t 0` (or clicking Restart in the Start Menu, which bypasses Fast Startup).
+1. If uptime is high, perform a full cold reboot: `shutdown /r /t 0` (or clicking Restart in the Start Menu, which bypasses Fast Startup).
 2. Disable non-essential startup items in Task Manager > Startup apps.
 3. Clean temporary files: Run `cleanmgr.exe` or clear contents of `C:\Windows\Temp` and `%temp%`.
 4. Run System File Checker to repair corrupted OS components:
@@ -80,10 +80,10 @@ Get-PSDrive C | Select-Object Name, @{N="FreeGB";E={[math]::Round($_.Free/1GB,2)
 - Escalate to **L2 Desktop Support** if hardware diagnostics indicate failing NVMe/SSD (bad sectors / SMART errors) or persistent thermal throttling requiring fan/heatsink replacement.
 
 ### 12. Ticket Resolution Notes
-> *"Diagnosed system slowness reported by user. Discovered 28 days of system uptime with memory consumption at 94% due to orphaned background processes and accumulated sleep cycles. Cleaned temporary files (freed 8.4 GB), disabled unnecessary startup utilities, and executed a clean operating system reboot (shutdown /r /t 0) to reset kernel Session 0 and user memory. Verified CPU idle at 4% and memory at 42%. Tested application launch times with user; confirmed performance restored."*
+> *"Diagnosed system slowness reported by user. Discovered 28 days of system uptime with memory consumption at 94% due to orphaned background processes and accumulated sleep cycles. Cleaned temporary files (freed 8.4 GB), disabled unnecessary startup utilities, and executed a clean operating system reboot (shutdown /r /t 0) to reinitialize kernel state, device drivers, and user memory. Verified CPU idle at 4% and memory at 42%. Tested application launch times with user; confirmed performance restored."*
 
 ### 13. Interview Questions & Defensible Answers
 - **Q: A user calls and says their computer is very slow. What is the very first thing you check?**  
-  *A: "I start by checking system uptime in Task Manager or via PowerShell. In Windows 10 and 11, Fast Startup (hybrid boot) means clicking 'Shut Down' closes user applications but hibernates the Windows kernel and drivers to hiberfil.sys. If the computer has high uptime because the user only clicks shut down or uses sleep, driver states and kernel memory pools persist without re-initialization. Clicking 'Restart' or running `shutdown /r /t 0` forces a complete teardown of both the kernel session and user session, resolving many slowness issues. If uptime is low, I then look at real-time resource utilization to see whether CPU, RAM, or Disk is pegged at 100%."*
+  *A: "I start by checking system uptime in Task Manager or via PowerShell. In Windows 10 and 11, Fast Startup (hybrid boot) means clicking 'Shut Down' closes user applications but hibernates the Windows kernel and drivers to hiberfil.sys. If the computer has high uptime because the user only clicks shut down or uses sleep, driver states and kernel memory pools persist without re-initialization. Clicking 'Restart' or running `shutdown /r /t 0` forces a complete teardown and reinitialization of both the kernel session and user session, resolving many slowness issues. If uptime is low, I then look at real-time resource utilization to see whether CPU, RAM, or Disk is pegged at 100%."*
 - **Q: Does Fast Startup preserve running user applications like Word and Excel across shutdowns?**  
-  *A: "No. Fast Startup logs off the user session (Session 1), closing all user-mode applications and freeing user-mode RAM. It then hibernates only Session 0—the Windows kernel, executive subsystems, and loaded device drivers. The reason uptime accumulates is that the kernel session was not cold-booted, meaning driver-level memory leaks in Non-Paged Pool persist, but user applications must be reopened upon next logon."*
+  *A: "No. Fast Startup logs off user sessions (e.g., Session 1), closing all user-mode applications and freeing user-mode RAM. It then hibernates the operating system kernel session and loaded device drivers. The reason uptime accumulates is that the kernel session was hibernated rather than cold-booted, meaning driver-level memory leaks in Non-Paged Pool or stale driver states persist, while user applications must be reopened upon next logon."*

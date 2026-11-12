@@ -72,7 +72,8 @@ tracert -d 8.8.8.8
 - Hop 1: `192.168.10.1` (Local Default Gateway router)
 - Hop 2: `203.0.113.1` (ISP Gateway / WAN uplink)
 - Hop 3+: ISP Transit hops
-- *Break isolation:* If trace times out (`* * * Request timed out`) starting at Hop 2, the local LAN is functioning and the issue is an ISP fiber outage or firewall block.
+- *Diagnostic Note on Timeouts:* Intermediate hops displaying `* * * Request timed out` often indicate that an intermediate router is intentionally dropping or rate-limiting ICMP TTL-expired generation (control plane protection) rather than a failure point. A true network failure is confirmed only when timeouts persist continuously all the way to the destination, or when an intermediate hop returns an ICMP Destination/Network Unreachable message.
+- *Break isolation:* If trace times out continuously starting at Hop 2 all the way to the end, the local LAN is functioning and the issue is an ISP fiber outage, firewall routing block, or WAN interface down.
 
 ### Step 5: Test Port Connectivity with PowerShell
 ```powershell

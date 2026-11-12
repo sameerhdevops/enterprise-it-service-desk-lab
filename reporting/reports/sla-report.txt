@@ -1,9 +1,12 @@
 ***************************************************************************
-  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT OPERATIONS LAB
-  NOTE: Fictional learning lab data - not actual production metrics.
+  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT SERVICE DESK OPERATIONS LAB
+  NOTE: Fictional learning lab data (~25 employees) - not live production metrics.
+  Dataset Period: November 1–19, 2024 (Simulated Historical Sample)
+  Snapshot Baseline: 2024-11-19 12:00:00 IST
 ***************************************************************************
 ===========================================================================
    NEXORA TECHNOLOGIES - SERVICE LEVEL AGREEMENT (SLA) REPORT
+   Snapshot Baseline: 2024-11-19 12:00:00 IST
 ===========================================================================
 Priority  Target    Total  Res Met   Res Breach  Open Breach  Compliance %
 ---------------------------------------------------------------------------
@@ -14,9 +17,10 @@ P4        120h      5      5         0           0                 100.0%
 ---------------------------------------------------------------------------
 OVERALL             20     17        0           3                  85.0%
 ===========================================================================
-STATISTICAL INTERPRETATION:
-  * Resolved Tickets Evaluated:         17
+STATISTICAL INTERPRETATION & METHODOLOGY:
+  * Resolved Incidents Evaluated:        17
   * Resolution SLA on Resolved Tickets:  100.0% (17 of 17 met)
-  * Active Backlog Breaches:            3 (Tickets escalated / pending L2/L3)
-  * Total Portfolio SLA Rate:           85.0% (17 of 20 tickets compliant)
+  * Active Backlog Breaches at Snapshot: 3 of 3 overdue (> target SLA elapsed)
+  * Overall Sample SLA Compliance Rate:  85.0% (17 of 20 sample incidents compliant)
+  * Policy Basis: Elapsed clock hours (P1: 4h, P2: 8h, P3: 72h, P4: 120h continuous)
 ===========================================================================

@@ -49,7 +49,7 @@ As an L1 Service Desk Analyst, daily operations do not use the `admin` superuser
 
 ## 4. Post-Provisioning Validation Checklist
 - [ ] PDI URL accessible and admin authentication successful.
-- [ ] Test ITIL user created (`sameer.kulkarni` with role `itil`).
+- [ ] Test ITIL user created (`nexora.l1agent` with role `itil`).
 - [ ] Assignment groups imported/created (`L1 Service Desk`, `L2 Desktop`, `L2 Network`).
 - [ ] Fictional company caller records added for Nexora employees.
 - [ ] Incident creation test ticket logged and verified in `incident.list`.

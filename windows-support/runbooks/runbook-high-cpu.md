@@ -20,7 +20,7 @@ Single user impacted. Applications lag or become temporarily unresponsive. Batte
 1. Open Task Manager (`Ctrl + Shift + Esc`) and sort the **Processes** tab by the **CPU** column descending.
 2. If system processes are hidden, click "More details" and ensure "Show processes from all users" is active.
 3. Identify whether the culprit is a user-level process (e.g., Google Chrome, Teams) or a Windows system service (e.g., `TiWorker.exe`, `WmiPrvSE.exe`, `MsMpEng.exe`).
-4. If a system process, use Resource Monitor (`resmon`) to inspect associated threads and service handles.
+4. If a process appears hung or locked, open Resource Monitor (`resmon.exe`), go to the CPU tab, right-click the suspect process, and select **Analyze Wait Chain** to identify whether it is waiting on another process, I/O handle, or deadlock. Note: Resource Monitor displays associated worker threads, but an L1 technician terminates the *process* or *process tree*, not individual threads.
 
 ### 5. Tools Required
 - Task Manager (`taskmgr`)
@@ -53,7 +53,7 @@ Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-WMI-Activity/Operatio
 5. **Corrupted OneDrive or File Indexing Loop:** Windows Search indexing corrupt files.
 
 ### 9. Corrective Action
-1. **If user application (e.g., Chrome/Excel):** Save user work if possible, then select process in Task Manager and click **End Task** (or `Stop-Process -Id <PID> -Force`).
+1. **If user application (e.g., Chrome/Excel):** Save user work if possible, then select the process in Task Manager and click **End Task** (or in Resource Monitor / Task Manager, select **End Process Tree**; in PowerShell: `Stop-Process -Id <PID> -Force`). Note: Never attempt to terminate individual worker threads directly, as this risks kernel instability or application deadlocks—always terminate the parent process or process tree cleanly.
 2. **If `TiWorker.exe` / Windows Update:** Allow 15–20 minutes to complete installation. If permanently stuck, restart the Windows Update service:
    ```powershell
    Restart-Service -Name wuauserv -Force
@@ -67,11 +67,13 @@ Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-WMI-Activity/Operatio
 - Confirm fan speed gradually ramps down to whisper-quiet levels.
 
 ### 11. Escalation Conditions
-- Escalate to **L2 Desktop Support** if hardware fan bearings have failed (loud grinding noise) or if `System` (PID 4) consumes 100% CPU due to a misbehaving hardware interrupt/driver (DPC/Deferred Procedure Call latency).
+- Escalate to **L2 Desktop Support** if hardware fan bearings have failed (loud grinding noise) or if `System` (PID 4) / `System Interrupts` consumes excessive CPU due to a misbehaving hardware interrupt/driver (Deferred Procedure Call / DPC latency) requiring Windows Performance Toolkit (WPT) trace analysis.
 
 ### 12. Ticket Resolution Notes
-> *"Addressed high CPU utilization and fan noise. Diagnosed runaway Google Chrome renderer process (PID 14220) consuming 92% of CPU cycles due to a hung script in an intranet tab. Terminated the specific sub-process via Task Manager. CPU utilization dropped to 6% idle and chassis temperature stabilized. Verified with user."*
+> *"Addressed high CPU utilization and fan noise. Diagnosed runaway Google Chrome renderer process (PID 14220) consuming 92% of CPU cycles due to a hung script in an intranet tab. Verified thread wait chain in Resource Monitor, then terminated the runaway process tree cleanly via Task Manager. CPU utilization dropped to 6% idle and chassis temperature stabilized. Verified application responsiveness with user."*
 
 ### 13. Interview Questions & Defensible Answers
 - **Q: What do you do if `System` (PID 4) or `System Interrupts` is using 40-50% CPU?**  
-  *A: "High CPU usage by 'System Interrupts' or PID 4 is almost always caused by a malfunctioning hardware device driver continuously firing hardware interrupts (Interrupt Service Routines or DPCs). As an L1 tech, I would check Device Manager for yellow exclamation marks, review recently installed drivers or connected USB docks, and disconnect external peripherals one by one. If it persists, I would escalate to L2 to run Windows Performance Analyzer."*
+  *A: "'System Interrupts' is not a normal user process—it represents the CPU time spent servicing hardware interrupts (Interrupt Service Routines / ISRs) and Deferred Procedure Calls (DPCs). High CPU usage here is almost always caused by a malfunctioning hardware device driver or faulty peripheral continuously firing interrupts. As an L1 tech, I would check Device Manager for yellow exclamation marks, review recently installed drivers or connected USB docks, and disconnect external peripherals one by one to see if the interrupt storm clears. If it persists, I would escalate to L2/L3 to capture an ETL trace using Windows Performance Recorder (WPR) and analyze DPC/ISR execution times in Windows Performance Analyzer (WPA)."*
+- **Q: Can you terminate an individual thread that is causing high CPU in Resource Monitor?**  
+  *A: "No, L1 technicians terminate the process or process tree, not individual threads. While Resource Monitor and Process Explorer allow you to inspect individual thread activity and CPU cycles, terminating a thread directly inside a running process leaves shared memory structures, locks, and handles in an inconsistent state, typically crashing the entire process or corrupting data. The correct procedure is to use 'Analyze Wait Chain' to determine why the thread is blocked, and if runaway, terminate the process cleanly via End Task or Stop-Process."*

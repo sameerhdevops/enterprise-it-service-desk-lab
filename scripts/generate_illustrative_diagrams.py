@@ -2,7 +2,7 @@
 """
 Enterprise IT Service Desk & End-User Support Operations Lab
 Illustrative Visual Evidence Generator
-Author: Sameer Kulkarni (L1 Support Engineer)
+Author: sameerhdevops (IT Support Engineer L1 Portfolio)
 Platform: Python 3 Standard Library Only (No external dependencies)
 
 Generates 7 clean, high-resolution vector SVG diagrams in evidence/illustrative/.
@@ -327,7 +327,7 @@ def make_windows_troubleshooting_flow_svg():
   <text x="670" y="240" fill="#10b981" font-size="11" font-weight="bold">YES</text>
   <rect x="740" y="220" width="220" height="60" rx="6" fill="#065f46" stroke="#10b981"/>
   <text x="850" y="245" fill="#ffffff" font-size="12" font-weight="bold" text-anchor="middle">Execute Clean Reboot</text>
-  <text x="850" y="263" fill="#a7f3d0" font-size="10" text-anchor="middle">shutdown /r /t 0 (Reset Session 0)</text>
+  <text x="850" y="263" fill="#a7f3d0" font-size="10" text-anchor="middle">shutdown /r /t 0 (Cold Restart)</text>
 
   <!-- Branch No -->
   <line x1="500" y1="300" x2="500" y2="340" stroke="#ef4444" stroke-width="2"/>
@@ -439,7 +439,7 @@ def make_sla_dashboard_svg():
     Service Desk Operational Performance &amp; SLA Dashboard
   </text>
   <text x="500" y="92" fill="#94a3b8" font-size="12" text-anchor="middle">
-    Simulated Metrics Generated from incidents/incident-register.csv (November 2024 Consolidated)
+    Simulated Metrics Generated from incidents/incident-register.csv (Nov 1–19, 2024 Historical Snapshot)
   </text>
 
   <!-- 4 KPI Cards -->
@@ -452,15 +452,15 @@ def make_sla_dashboard_svg():
 
     <!-- Resolved Rate -->
     <rect x="225" y="0" width="200" height="90" rx="8" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
-    <text x="245" y="30" fill="#94a3b8" font-size="12">First Contact Resolution</text>
+    <text x="245" y="30" fill="#94a3b8" font-size="12">L1 Resolution Rate</text>
     <text x="245" y="65" fill="#10b981" font-size="28" font-weight="bold">85.0%</text>
     <text x="245" y="80" fill="#a7f3d0" font-size="10">17 of 20 resolved at L1</text>
 
     <!-- MTTR -->
     <rect x="450" y="0" width="200" height="90" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
     <text x="470" y="30" fill="#94a3b8" font-size="12">Mean Time to Resolve</text>
-    <text x="470" y="65" fill="#f59e0b" font-size="28" font-weight="bold">11.51h</text>
-    <text x="470" y="80" fill="#fde68a" font-size="10">Across 17 resolved incidents</text>
+    <text x="470" y="65" fill="#f59e0b" font-size="28" font-weight="bold">15.75h</text>
+    <text x="470" y="80" fill="#fde68a" font-size="10">267.75h / 17 resolved incidents</text>
 
     <!-- SLA Compliance -->
     <rect x="675" y="0" width="205" height="90" rx="8" fill="#1e293b" stroke="#8b5cf6" stroke-width="1.5"/>
@@ -471,7 +471,7 @@ def make_sla_dashboard_svg():
 
   <!-- SLA Breakdown Table Mockup -->
   <rect x="60" y="235" width="880" height="310" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="85" y="270" fill="#f8fafc" font-size="15" font-weight="bold">SLA PERFORMANCE BREAKDOWN BY PRIORITY TIER</text>
+  <text x="85" y="270" fill="#f8fafc" font-size="15" font-weight="bold">SLA PERFORMANCE BREAKDOWN BY PRIORITY TIER (ELAPSED HOURS)</text>
 
   <!-- Table Header -->
   <rect x="85" y="290" width="830" height="30" fill="#0f172a"/>
@@ -484,7 +484,7 @@ def make_sla_dashboard_svg():
 
   <!-- Row P1 -->
   <text x="100" y="345" fill="#ef4444" font-size="12" font-weight="bold">P1 - Critical</text>
-  <text x="220" y="345" fill="#cbd5e1" font-size="12">4 Hours</text>
+  <text x="220" y="345" fill="#cbd5e1" font-size="12">4 Elapsed Hours</text>
   <text x="360" y="345" fill="#cbd5e1" font-size="12">3</text>
   <text x="480" y="345" fill="#10b981" font-size="12">2 (66.7%)</text>
   <text x="630" y="345" fill="#ef4444" font-size="12">1 (INC0010)</text>
@@ -492,7 +492,7 @@ def make_sla_dashboard_svg():
 
   <!-- Row P2 -->
   <text x="100" y="385" fill="#f59e0b" font-size="12" font-weight="bold">P2 - High</text>
-  <text x="220" y="385" fill="#cbd5e1" font-size="12">8 Business Hours</text>
+  <text x="220" y="385" fill="#cbd5e1" font-size="12">8 Elapsed Hours</text>
   <text x="360" y="385" fill="#cbd5e1" font-size="12">5</text>
   <text x="480" y="385" fill="#10b981" font-size="12">3 (60.0%)</text>
   <text x="630" y="385" fill="#f59e0b" font-size="12">2 (INC0004, 19)</text>
@@ -500,7 +500,7 @@ def make_sla_dashboard_svg():
 
   <!-- Row P3 -->
   <text x="100" y="425" fill="#3b82f6" font-size="12" font-weight="bold">P3 - Medium</text>
-  <text x="220" y="425" fill="#cbd5e1" font-size="12">3 Business Days</text>
+  <text x="220" y="425" fill="#cbd5e1" font-size="12">72 Elapsed Hours</text>
   <text x="360" y="425" fill="#cbd5e1" font-size="12">7</text>
   <text x="480" y="425" fill="#10b981" font-size="12">7 (100.0%)</text>
   <text x="630" y="425" fill="#cbd5e1" font-size="12">0</text>
@@ -508,7 +508,7 @@ def make_sla_dashboard_svg():
 
   <!-- Row P4 -->
   <text x="100" y="465" fill="#64748b" font-size="12" font-weight="bold">P4 - Low</text>
-  <text x="220" y="465" fill="#cbd5e1" font-size="12">5 Business Days</text>
+  <text x="220" y="465" fill="#cbd5e1" font-size="12">120 Elapsed Hours</text>
   <text x="360" y="465" fill="#cbd5e1" font-size="12">5</text>
   <text x="480" y="465" fill="#10b981" font-size="12">5 (100.0%)</text>
   <text x="630" y="465" fill="#cbd5e1" font-size="12">0</text>

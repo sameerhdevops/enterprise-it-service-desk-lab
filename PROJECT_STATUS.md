@@ -48,7 +48,7 @@
 | **Module 8: ITIL Processes & Ops** | `itil-processes/*` (7 files), `operations/*` (4 files) | **DOCUMENTED** | ITIL 4 processes, SLA policy, escalation procedures, morning/evening checklists, shift handovers. |
 | **Module 9: Asset Management & CMDB** | `asset-inventory.csv` (25 assets), ITAM guide, CMDB fundamentals | **SIMULATED** | 25 assets tracked with serials & warranties; ITAM lifecycle and CMDB dependency mapping. |
 | **Module 10: Knowledge Base** | 12 standardized KB articles (`KB0001`–`KB0012`) | **DOCUMENTED** | Standard enterprise KB articles across Windows, Networking, M365, and User Access. |
-| **Module 11: Reporting & Automation** | `report-generator.py`, unit tests, 5 sample reports, data validator | **IMPLEMENTED & VERIFIED** | Python 3 standard library reporting, 7/7 unit tests passing, MTTR (11.51h) and SLA (85.0%) verified. |
+| **Module 11: Reporting & Automation** | `report-generator.py`, unit tests, 5 sample reports, data validator | **IMPLEMENTED & VERIFIED** | Python 3 standard library reporting, 13/13 unit tests passing, MTTR (15.75h, 267.75h total) and SLA (85.0% at snapshot) verified. |
 | **Module 12: Communication** | Phone scripts, email templates, ticket comments, escalations | **DOCUMENTED** | Professional service desk communication artifacts in `communication/`. |
 | **Module 13: Evidence & Verification** | Sanitized command logs, 7 illustrative SVGs, validation logs, register | **IMPLEMENTED & VERIFIED** | Verified host command formats, 7 vector SVG visuals in `evidence/illustrative/`, full evidence register. |
 | **Module 14: Interview Preparation** | 60s/3min pitches, 36 technical Q&A, 10 scenarios, 5 walkthroughs | **IMPLEMENTED & VERIFIED** | Technically accurate, defensible L1 fresher interview preparation material. |
@@ -57,7 +57,7 @@
 
 ## 4. Quality Assurance Summary
 - **Target Repository:** `https://github.com/sameerhdevops/enterprise-it-service-desk-lab`
-- **Unit Test Suite (`reporting/tests/test_validation.py`):** 7/7 Tests Passed (0.018s)
+- **Unit Test Suite (`reporting/tests/test_validation.py`):** 13/13 Tests Passed (0.028s)
 - **Dataset Validator (`scripts/validate-data.py`):** 5/5 Datasets Validated (0 Errors, 0 Warnings)
-- **Reporting Generator:** MTTR = 11.51 hours (across 17 resolved incidents); L1 Resolution Rate = 85.0% (17 of 20 resolved at L1 without escalation); SLA Compliance = 100% on resolved tickets, 85.0% across overall portfolio.
+- **Reporting Generator:** MTTR = 15.75 hours (across 17 resolved incidents, 267.75 total resolution hours); L1 Resolution Rate = 85.0% (17 of 20 resolved at L1 without escalation); SLA Compliance = 100% on resolved tickets, 85.0% across overall portfolio at historical snapshot (2024-11-19 12:00 IST).
 - **Evidence Register:** 18 total artifacts classified, sanitized, and verified in `evidence/evidence-register.md`.

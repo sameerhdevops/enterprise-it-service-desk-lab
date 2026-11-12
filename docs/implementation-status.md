@@ -30,7 +30,7 @@ All modules, platforms, and deliverables are categorized using four standardized
 | **ITIL & Operations** | 7 ITIL process docs, SLA policy, Escalation matrix, Daily checklist, Escalation procedure, Shift handover template & completed sample | **DOCUMENTED** | Full ITIL documentation in `itil-processes/` and operational checklists/handovers in `operations/`. |
 | **Asset Management & CMDB** | Asset inventory CSV (25 assets), Asset management SOP, CMDB fundamentals | **SIMULATED** | `asset-inventory.csv` with 25 realistic corporate assets; ITAM and CMDB guides complete. |
 | **Knowledge Base** | 12 standardized KB articles across Windows, Networking, M365, User Access | **DOCUMENTED** | 12 markdown articles (KB0001–KB0012) following consistent standard enterprise KB template. |
-| **Reporting & MIS** | Python reporting utility, automated unit tests, 5 sample text reports, data validator | **IMPLEMENTED & VERIFIED** | `reporting/report-generator.py` (Python stdlib only), 7/7 unit tests passing (`test_validation.py`), 5 text reports in `reporting/reports/`, `scripts/validate-data.py` passing. MTTR (11.51h) and SLA (85.0%) verified. |
+| **Reporting & MIS** | Python reporting utility, automated unit tests, 5 sample text reports, data validator | **IMPLEMENTED & VERIFIED** | `reporting/report-generator.py` (Python stdlib only), 13/13 unit tests passing (`test_validation.py`), 5 text reports in `reporting/reports/`, `scripts/validate-data.py` passing. MTTR (15.75h, 267.75h total) and SLA (85.0% at snapshot) verified. |
 | **Customer Communication** | 5 phone dialogues, 8 email templates, 10 ticket comment pairs, 4 escalation transmittals | **DOCUMENTED** | Realistic, professional service desk communication examples in `communication/`. |
 | **Evidence & Command Logs** | Sanitized command logs, 7 illustrative SVGs, validation logs, evidence register | **IMPLEMENTED & VERIFIED** | 8 sanitized host command outputs in `evidence/command-output/`, 7 vector SVG diagrams in `evidence/illustrative/`, full register in `evidence/evidence-register.md`. |
 | **Interview Preparation** | 60s & 3-5min pitches, 36 technical Q&A, 10 scenario runbooks, 5 live demonstration scripts | **IMPLEMENTED & VERIFIED** | Defensible, L1-tailored interview material in `interview-preparation/`. |
@@ -41,15 +41,21 @@ All modules, platforms, and deliverables are categorized using four standardized
 
 ### Automated Unit Test Suite (`reporting/tests/test_validation.py`)
 ```text
-test_01_csv_parsing_live (__main__.TestServiceDeskValidation.test_01_csv_parsing_live) ... ok
-test_02_no_duplicate_incident_ids (__main__.TestServiceDeskValidation.test_02_no_duplicate_incident_ids) ... ok
-test_03_valid_priorities (__main__.TestServiceDeskValidation.test_03_valid_priorities) ... ok
-test_04_valid_statuses (__main__.TestServiceDeskValidation.test_04_valid_statuses) ... ok
-test_05_date_chronology (__main__.TestServiceDeskValidation.test_05_date_chronology) ... ok
-test_06_report_calculations (__main__.TestServiceDeskValidation.test_06_report_calculations) ... ok
-test_07_empty_data_handling (__main__.TestServiceDeskValidation.test_07_empty_data_handling) ... ok
+test_01_csv_parsing_live (test_validation.TestServiceDeskValidation.test_01_csv_parsing_live) ... ok
+test_02_no_duplicate_incident_ids (test_validation.TestServiceDeskValidation.test_02_no_duplicate_incident_ids) ... ok
+test_03_valid_priorities (test_validation.TestServiceDeskValidation.test_03_valid_priorities) ... ok
+test_04_valid_statuses (test_validation.TestServiceDeskValidation.test_04_valid_statuses) ... ok
+test_05_date_chronology (test_validation.TestServiceDeskValidation.test_05_date_chronology) ... ok
+test_06_report_calculations_fixture (test_validation.TestServiceDeskValidation.test_06_report_calculations_fixture) ... ok
+test_07_empty_data_handling (test_validation.TestServiceDeskValidation.test_07_empty_data_handling) ... ok
+test_08_elapsed_duration_calculation (test_validation.TestServiceDeskValidation.test_08_elapsed_duration_calculation) ... ok
+test_09_timestamp_mismatch_detection_live (test_validation.TestServiceDeskValidation.test_09_timestamp_mismatch_detection_live) ... ok
+test_10_sla_target_comparison (test_validation.TestServiceDeskValidation.test_10_sla_target_comparison) ... ok
+test_11_open_ticket_overdue_evaluation (test_validation.TestServiceDeskValidation.test_11_open_ticket_overdue_evaluation) ... ok
+test_12_reconciled_dataset_metrics (test_validation.TestServiceDeskValidation.test_12_reconciled_dataset_metrics) ... ok
+test_13_invalid_date_formats (test_validation.TestServiceDeskValidation.test_13_invalid_date_formats) ... ok
 
-Ran 7 tests in 0.021s | Result: OK (100% Pass)
+Ran 13 tests in 0.028s | Result: OK (100% Pass)
 ```
 
 ### Dataset Integrity Validator (`scripts/validate-data.py`)
@@ -70,16 +76,21 @@ Validation Summary: 0 Errors, 0 Warnings
 ### Mathematical Audit of Calculated Metrics:
 1. **Total Logged Incidents:** 20 (`incidents/incident-register.csv`)
 2. **Resolved Incidents:** 17 (85.0%)
-3. **Escalated / Active Backlog:** 3 (15.0% - INC0004, INC0010, INC0019)
-4. **Mean Time to Resolve (MTTR):**  
-   Sum of resolution hours across 17 resolved incidents = `195.75 hours`.  
-   `195.75 / 17 = 11.5147` -> **11.51 hours**.
-5. **L1 Resolution Rate (Non-Escalated):**  
+3. **Escalated / Active Open Backlog:** 3 (15.0% - INC0004, INC0010, INC0019)
+4. **Historical Snapshot Baseline:** Evaluated at `2024-11-19 12:00:00 Asia/Kolkata`:
+   - `INC0004` (P2, target 8h): 358.0 hours elapsed (Overdue / Breached)
+   - `INC0010` (P2, target 8h): 286.0 hours elapsed (Overdue / Breached)
+   - `INC0019` (P2, target 8h): 24.5 hours elapsed (Overdue / Breached)
+5. **Mean Time to Resolve (MTTR):**  
+   Sum of resolution hours across 17 resolved incidents = `267.75 hours`.  
+   `267.75 / 17 = 15.75 hours`.
+6. **Total Resolution Time:** `267.75 hours` across all resolved tickets.
+7. **L1 Resolution Rate (Non-Escalated):**  
    17 resolved at L1 without escalation = `17 / 20` -> **85.0%**. (Note: In service desk analytics, true First Contact Resolution [FCR] requires tracking multi-touch interactions; this metric accurately measures L1 non-escalated resolution rate).
-6. **SLA Compliance on Resolved Incidents:**  
+8. **SLA Compliance on Resolved Incidents:**  
    All 17 resolved incidents completed within target = `17 / 17` -> **100.0%**.
-7. **Overall Portfolio SLA Performance:**  
-   17 Met, 3 Breached (Escalated open past initial window) = `17 / 20` -> **85.0%**.
+9. **Overall Portfolio SLA Performance (at snapshot):**  
+   17 Met, 3 Breached (Escalated open past initial SLA target window) = `17 / 20` -> **85.0%**.
 
 ---
 

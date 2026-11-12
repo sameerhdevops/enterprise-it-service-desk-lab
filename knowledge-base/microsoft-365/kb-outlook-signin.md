@@ -1,7 +1,7 @@
 # Standard Knowledge Base Article: Resolving Microsoft Outlook Sign-in Issues
 **KB ID:** KB0005  
 **Category:** Microsoft 365 / Outlook  
-**Author:** Sameer Kulkarni (L1 Support)  
+**Author:** Nexora IT Service Desk (L1 Support)  
 **Last Reviewed:** 2024-11-12  
 
 ---
