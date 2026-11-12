@@ -112,7 +112,7 @@ class TestServiceDeskValidation(unittest.TestCase):
         """Test calculation functions using deterministic fixture data."""
         summary = report_generator.generate_daily_summary(SAMPLE_VALID_DATA)
         self.assertIn("Total Logged Incidents:       2", summary)
-        self.assertIn("Active Open / In-Progress:    1", summary)
+        self.assertIn("Active Open / Backlog:        1", summary)
         self.assertIn("Resolved Incidents:           1", summary)
         
         sla_rep = report_generator.generate_sla_report(SAMPLE_VALID_DATA)

@@ -1,15 +1,20 @@
+***************************************************************************
+  [SIMULATED DATASET] NEXORA TECHNOLOGIES IT OPERATIONS LAB
+  NOTE: Fictional learning lab data - not actual production metrics.
+***************************************************************************
 ===========================================================================
    NEXORA TECHNOLOGIES - WEEKLY IT SERVICE DESK MIS REPORT
-   Reporting Period: November 2024 (Consolidated)
+   Reporting Period: November 2024 (Consolidated Month-End)
 ===========================================================================
 EXECUTIVE SUMMARY:
   Total IT Interactions Logged:      28
   Total Incident Tickets:            20
   Total Service Requests:            8
-  Mean Time to Resolve (MTTR):       11.51 hours
+  Mean Time to Resolve (MTTR):       11.51 hours (Over 17 resolved incidents)
+  First Contact Resolution (FCR):    85.0% (17 resolved at L1)
   Total Escalated to L2/L3:          3 (15.0%)
 ---------------------------------------------------------------------------
-TICKETS BY ASSIGNMENT GROUP:
+INCIDENTS BY ASSIGNMENT GROUP:
   L1 Service Desk               : 20 (100.0%)
 ---------------------------------------------------------------------------
 INCIDENTS BY IMPACTED DEPARTMENT:

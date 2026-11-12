@@ -94,6 +94,16 @@ Start with [docs/project-overview.md](docs/project-overview.md) for the full pic
 
 This lab runs on a single Windows 11 machine — no cloud VMs, no complex infrastructure. The specifics are in [docs/environment-details.md](docs/environment-details.md), but the short version: a laptop with an i5 and 16GB RAM, running everything locally. That's a deliberate choice — it mirrors the kind of hardware you'd actually troubleshoot in a small office.
 
+## Implementation Status & Defensibility
+
+To ensure transparency during technical interviews, all modules follow four standardized status classifications:
+- **IMPLEMENTED & VERIFIED:** Actually configured, executed, and tested locally (Windows 11 diagnostics, Python reporting utility, unit tests, dataset validators, command evidence).
+- **DOCUMENTED:** Standard operating procedures, runbooks, and configurations are fully authored and defensible.
+- **SIMULATED:** Modeled through realistic fictional datasets (20 incidents, 8 service requests, 3 problems, 3 changes, 25 assets) and illustrative vector diagrams.
+- **MANUAL ACTION REQUIRED:** Requires individual candidate cloud credentials (ServiceNow PDI registration, Atlassian Cloud free tier).
+
+See [docs/implementation-status.md](docs/implementation-status.md) and [PROJECT_STATUS.md](PROJECT_STATUS.md) for the complete compliance audit.
+
 ## Disclaimer
 
 This is a **learning project**. Nexora Technologies is fictional. The incidents, users, and org structure are all made up for practice purposes. Nothing here should be treated as production-ready configuration or deployed in a real environment. Credentials, if any appear in examples, are for lab instances only.

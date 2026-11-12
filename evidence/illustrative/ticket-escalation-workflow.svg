@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 550" width="100%" height="100%" style="background:#0f172a; font-family:system-ui, -apple-system, sans-serif;">
+  <rect x="0" y="0" width="1000" height="35" fill="#dc2626"/>
+  <text x="500" y="23" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" letter-spacing="1">
+    [ILLUSTRATIVE / SIMULATED LAB ARTIFACT - ESCALATION MATRIX]
+  </text>
+  <text x="500" y="70" fill="#f8fafc" font-size="20" font-weight="bold" text-anchor="middle">
+    Service Desk Functional &amp; Hierarchical Escalation Matrix
+  </text>
+
+  <!-- L1 Box -->
+  <rect x="80" y="110" width="240" height="200" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="200" y="140" fill="#38bdf8" font-size="16" font-weight="bold" text-anchor="middle">L1 Service Desk</text>
+  <text x="200" y="165" fill="#94a3b8" font-size="11" text-anchor="middle">First Contact Intake &amp; Triage</text>
+  <text x="100" y="195" fill="#cbd5e1" font-size="11">• 30-Minute Investigation Limit</text>
+  <text x="100" y="215" fill="#cbd5e1" font-size="11">• Desktop Client Diagnostics</text>
+  <text x="100" y="235" fill="#cbd5e1" font-size="11">• Password Resets &amp; Unlocks</text>
+  <text x="100" y="255" fill="#cbd5e1" font-size="11">• Standard Peripheral Triage</text>
+  <text x="100" y="275" fill="#cbd5e1" font-size="11">• SBAR Handover Documentation</text>
+
+  <!-- Escalation Criteria Arrow -->
+  <line x1="320" y1="210" x2="420" y2="210" stroke="#f59e0b" stroke-width="3"/>
+  <text x="370" y="195" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">Time &gt;30m or</text>
+  <text x="370" y="235" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">Privilege Block</text>
+
+  <!-- L2 Tier Box -->
+  <rect x="420" y="110" width="260" height="200" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+  <text x="550" y="140" fill="#f59e0b" font-size="16" font-weight="bold" text-anchor="middle">L2 Technical Support</text>
+  <text x="440" y="175" fill="#e2e8f0" font-size="12" font-weight="bold">L2 Desktop Support:</text>
+  <text x="440" y="195" fill="#94a3b8" font-size="11">• Physical hardware teardown &amp; RMA</text>
+  <text x="440" y="215" fill="#94a3b8" font-size="11">• OS Re-imaging &amp; BitLocker recovery</text>
+  <text x="440" y="245" fill="#e2e8f0" font-size="12" font-weight="bold">L2 Network Support:</text>
+  <text x="440" y="265" fill="#94a3b8" font-size="11">• Switch port VLAN assignments</text>
+  <text x="440" y="285" fill="#94a3b8" font-size="11">• Firewall MTU policies &amp; VPN config</text>
+
+  <!-- L3 Tier Box -->
+  <rect x="730" y="110" width="200" height="200" rx="8" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+  <text x="830" y="140" fill="#ef4444" font-size="16" font-weight="bold" text-anchor="middle">L3 / Infrastructure</text>
+  <text x="745" y="175" fill="#cbd5e1" font-size="11">• Domain Controllers (FSMO)</text>
+  <text x="745" y="195" fill="#cbd5e1" font-size="11">• Hypervisors &amp; SAN Storage</text>
+  <text x="745" y="215" fill="#cbd5e1" font-size="11">• Exchange Online Tenant</text>
+  <text x="745" y="235" fill="#cbd5e1" font-size="11">• Third-Party Vendors (SAP, HP)</text>
+  <text x="745" y="255" fill="#cbd5e1" font-size="11">• Emergency Changes (ECAB)</text>
+
+  <!-- Hierarchical Row -->
+  <rect x="80" y="340" width="850" height="150" rx="8" fill="#1e293b" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="110" y="375" fill="#a78bfa" font-size="15" font-weight="bold">HIERARCHICAL (MANAGEMENT) ESCALATION PATH</text>
+  <text x="110" y="405" fill="#e2e8f0" font-size="12">• P1 Major Incident Trigger: Immediate notification to IT Service Desk Lead within 15 minutes of occurrence.</text>
+  <text x="110" y="430" fill="#e2e8f0" font-size="12">• SLA At-Risk Warning: Escalation when an active P2 incident reaches 75% of resolution SLA target without clear root cause.</text>
+  <text x="110" y="455" fill="#e2e8f0" font-size="12">• Customer Dissatisfaction / Executive Escalation: Immediate routing to Service Desk Lead for mediation.</text>
+</svg>

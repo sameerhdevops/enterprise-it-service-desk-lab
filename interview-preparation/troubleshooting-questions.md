@@ -7,10 +7,10 @@
 ## Category 1: Windows Operating System & Desktop Support (8 Questions)
 
 ### Q1: What is the first thing you check when a user reports their Windows computer is running slow?
-**A:** "I check the system uptime in Task Manager or via PowerShell (`(Get-CimInstance Win32_OperatingSystem).LastBootUpTime`). Because Windows 10 and 11 use Fast Startup, shutting down often hibernates the kernel instead of performing a cold restart. If uptime is high (e.g., 20+ days), accumulated memory leaks and fragmented handles often cause slowness, and a clean restart (`shutdown /r /t 0`) resolves it. If uptime is low, I look at real-time resource utilization to see whether CPU, RAM, or Disk is pegged at 100%."
+**A:** "I check system uptime in Task Manager or via PowerShell (`(Get-CimInstance Win32_OperatingSystem).LastBootUpTime`). In Windows 10 and 11, Fast Startup (hybrid boot) logs off user sessions but hibernates the Windows Kernel (Session 0) and device drivers to `hiberfil.sys`. When users click 'Shut Down', the kernel is not cold-booted; uptime continues to accumulate, and any corrupted driver states or kernel-mode memory leaks (in Non-Paged or Paged Pool) persist. In addition, users often leave laptops in sleep mode for weeks without closing applications, causing user-mode memory leaks. Clicking 'Restart' or running `shutdown /r /t 0` completely tears down both Session 0 and user sessions, re-initializing the kernel and clearing memory. If uptime is low, I then inspect Task Manager to see whether CPU, RAM, or Disk is pegged at 100%."
 
-### Q2: How do you identify whether high CPU is caused by a hardware driver issue or a user application?
-**A:** "In Task Manager, if a specific application like Chrome or Teams is listed with high percentage, it's a user application issue. If the high CPU is consumed by 'System' (PID 4) or 'System Interrupts', it indicates a hardware driver issue where an internal device is continuously generating Deferred Procedure Calls (DPCs) or hardware interrupts. I would inspect Device Manager for yellow exclamation marks and disconnect external USB docks or peripherals one by one."
+### Q2: Does Fast Startup preserve running user applications like Word or browser tabs across shutdowns?
+**A:** "No. Fast Startup terminates the user session (Session 1), cleanly closing all user-mode applications and freeing user-mode RAM. It then writes only Session 0—the Windows kernel, executive subsystem, and loaded device drivers—to `hiberfil.sys`. The reason uptime accumulates is because the kernel state was restored rather than cold-booted. Any issues persisting across a Fast Startup shutdown are located in kernel drivers or system services, not in user applications."
 
 ### Q3: What is the difference between physical RAM and virtual memory?
 **A:** "Physical RAM is the high-speed hardware memory installed on the motherboard where active programs execute. Virtual memory is an OS technique where Windows combines physical RAM with temporary space on the hard drive (the paging file, `pagefile.sys`). When physical RAM runs low, Windows offloads inactive memory pages to disk to free up physical RAM for active foreground tasks."
@@ -91,6 +91,11 @@
 
 ### Q21: What is the very first thing you must do before resetting a user's password over the phone?
 **A:** "Verify the caller's identity to prevent social engineering attacks. I confirm their Employee ID number, manager name, and department against the HR directory, or call them back on their registered corporate mobile phone number on file before resetting credentials."
+
+### Q21b: An employee's account keeps locking out every 15 minutes after being unlocked. How do you find the source device using Event Viewer?
+**A:** "I investigate using two specific Windows Event IDs across the domain and client:
+1. **On the Domain Controller (specifically the PDC Emulator):** I open Event Viewer > Security Log and filter for **Event ID 4740** ('A user account was locked out'). In the event details, I check the **'Caller Computer Name'** field, which identifies the exact workstation, laptop, or mobile hostname where the failed authentications originated.
+2. **On the Caller Workstation/Device:** I open the local Security Log and filter for **Event ID 4625** ('An account failed to log on'). I examine the **Logon Type** (e.g., Logon Type 2 for Interactive, Logon Type 3 for Network/Exchange ActiveSync/SMB share) and the **Process Name** (e.g., `svchost.exe`, `lsass.exe`, or a mail app). This reveals whether a smartphone syncing corporate Wi-Fi with an expired password, a stale mapped drive credential in Windows Credential Manager, or a legacy background service is firing the bad attempts."
 
 ---
 
