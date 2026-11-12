@@ -1,6 +1,14 @@
 # Enterprise IT Service Desk Lab
 
+[![Repository](https://img.shields.io/badge/GitHub-sameerhdevops%2Fenterprise--it--service--desk--lab-blue?logo=github)](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)
+[![Validation Tests](https://img.shields.io/badge/Tests-7%2F7%20Passing-brightgreen)](reporting/tests/test_validation.py)
+[![Data Integrity](https://img.shields.io/badge/Datasets-Validated-brightgreen)](scripts/validate-data.py)
+[![Role](https://img.shields.io/badge/Target%20Role-IT%20Support%20Engineer%20L1-orange)]()
+
 A hands-on learning lab simulating L1 IT support operations for a small fictional company called **Nexora Technologies**. I built this to teach myself the day-to-day workflows, tools, and troubleshooting that an entry-level IT Support Engineer actually deals with — ticketing, Active Directory, networking, hardware issues, the whole stack.
+
+**Repository URL:** [https://github.com/sameerhdevops/enterprise-it-service-desk-lab](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)  
+**Author:** Sameer Kulkarni ([@sameerhdevops](https://github.com/sameerhdevops))
 
 ## What This Is (and Isn't)
 
@@ -103,6 +111,24 @@ To ensure transparency during technical interviews, all modules follow four stan
 - **MANUAL ACTION REQUIRED:** Requires individual candidate cloud credentials (ServiceNow PDI registration, Atlassian Cloud free tier).
 
 See [docs/implementation-status.md](docs/implementation-status.md) and [PROJECT_STATUS.md](PROJECT_STATUS.md) for the complete compliance audit.
+
+## Quick Start & Verification
+
+Clone and verify the lab datasets and reporting engine locally (requires Python 3.8+; standard library only, zero external pip packages):
+
+```bash
+git clone https://github.com/sameerhdevops/enterprise-it-service-desk-lab.git
+cd enterprise-it-service-desk-lab
+
+# 1. Validate dataset integrity across all CSV registers
+python scripts/validate-data.py
+
+# 2. Run automated validation and calculation unit test suite
+python -m unittest discover -s reporting/tests
+
+# 3. Generate Service Desk MIS and SLA reports
+python reporting/report-generator.py --save all
+```
 
 ## Disclaimer
 

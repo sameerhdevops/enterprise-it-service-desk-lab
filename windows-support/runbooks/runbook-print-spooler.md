@@ -51,12 +51,14 @@ Get-ChildItem -Path "C:\Windows\System32\spool\PRINTERS"
 4. **Insufficient Disk Space:** Drive C: has zero bytes available to write spool files.
 
 ### 9. Corrective Action (The Standard Spooler Purge Procedure)
+> **Safety Notice:** Inform the user prior to execution that all currently queued, unprinted documents will be discarded and must be re-sent after service restoration. Never delete spool files while the `Spooler` service is active.
+
 Execute the standard 4-step L1 Print Spooler reset script in an elevated PowerShell session:
 ```powershell
-# Step 1: Stop the print spooler service
+# Step 1: Stop the print spooler service (releases file locks on .SPL/.SHD files)
 Stop-Service -Name Spooler -Force
 
-# Step 2: Delete all stuck print spool and shadow files
+# Step 2: Delete all stuck print spool (.SPL raw data) and shadow (.SHD metadata) files
 Remove-Item -Path "C:\Windows\System32\spool\PRINTERS\*" -Force
 
 # Step 3: Start the print spooler service
@@ -84,4 +86,4 @@ If the spooler continues crashing after purging files:
 
 ### 13. Interview Questions & Defensible Answers
 - **Q: Walk me through the exact steps to clear a stuck print job in Windows when you cannot cancel it through the GUI.**  
-  *A: "When a print job is locked in the GUI, clicking 'Cancel' often hangs on 'Deleting...'. The standard procedure is: First, open an elevated command prompt or PowerShell and stop the Print Spooler service with `net stop spooler` or `Stop-Service Spooler -Force`. Second, navigate to `C:\Windows\System32\spool\PRINTERS` and delete all files inside (which are the temporary .SPL and .SHD files). Third, restart the service with `net start spooler` or `Start-Service Spooler`. Finally, verify in the print queue that the queue is empty and test with a fresh print job."*
+  *A: "When a print job is locked in the GUI, clicking 'Cancel' often hangs on 'Deleting...'. The standard procedure is: First, notify the user that pending print jobs will be cleared. Second, open an elevated command prompt or PowerShell and stop the Print Spooler service with `Stop-Service Spooler -Force`—this releases file locks and prevents spooler crashes. Third, navigate to `C:\Windows\System32\spool\PRINTERS` and delete all temporary `.SPL` (raw print data) and `.SHD` (shadow job header) files. Fourth, restart the service with `Start-Service Spooler`. Finally, verify that the queue is clear and print a test page."*

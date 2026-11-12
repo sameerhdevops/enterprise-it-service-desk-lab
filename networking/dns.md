@@ -80,3 +80,18 @@ nslookup -type=TXT nexora.com
 3. **Verify Adapter DNS Settings:**
    - Open `ncpa.cpl` > Properties of active NIC > IPv4 Properties.
    - Ensure DNS is set to "Obtain DNS server address automatically" (or pointing to valid corporate DNS IPs, never `127.0.0.1` unless it is a Domain Controller).
+
+---
+
+## 5. Layer 4 Port Testing vs. Layer 7 DNS Resolution Diagnostics
+
+A critical distinction in enterprise network troubleshooting:
+
+| Diagnostic Tool | Layer | Protocol / Port | What It Actually Tests | Common Pitfall / Limitation |
+|---|---|---|---|---|
+| `Test-NetConnection -Port 53` (or `telnet`) | Layer 4 (Transport) | TCP Port 53 | Verifies TCP three-way handshake (`SYN`, `SYN-ACK`, `ACK`) can be established with the host. | Does **NOT** test standard client DNS queries (which operate over **UDP 53**). A stateful firewall may permit TCP 53 while blocking UDP 53. Does not test if the DNS service responds with valid DNS records. |
+| `Resolve-DnsName` (PowerShell) | Layer 7 (Application) | UDP 53 / TCP 53 fallback | Formulates an actual DNS request packet, queries the target nameserver, and parses the returned Resource Records (A, CNAME, MX). | True end-to-end DNS test. Accurately reports whether the nameserver is authoritative, reachable, and capable of resolving records. |
+| `nslookup` (CMD / Cross-platform) | Layer 7 (Application) | UDP 53 / TCP 53 fallback | Directly queries configured or specified nameservers for specific record types. | True Layer 7 query. Bypasses local hosts file and OS resolver cache to test server health directly. |
+
+**Key L1 Rule:** Never assume DNS is healthy simply because `Test-NetConnection -ComputerName <DC> -Port 53` returns `TcpTestSucceeded : True`. Always follow up with a Layer 7 query: `Resolve-DnsName -Name portal.corp.nexoratech.com -Server <DC-IP>` or `nslookup`.
+

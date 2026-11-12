@@ -17,10 +17,11 @@
 
 ### Q4: Walk me through the exact steps to clear a stuck print job in Windows when you cannot cancel it in the GUI.
 **A:** "In an elevated command prompt or PowerShell:
-1. Stop the Print Spooler service: `net stop spooler` (or `Stop-Service Spooler -Force`).
-2. Navigate to `C:\Windows\System32\spool\PRINTERS` and delete all temporary `.SPL` and `.SHD` files inside.
-3. Restart the Print Spooler service: `net start spooler` (or `Start-Service Spooler`).
-4. Reopen the print queue to confirm it is empty, and send a fresh test page."
+1. Inform the user that pending queued jobs will be purged and must be resent.
+2. Stop the Print Spooler service: `net stop spooler` (or `Stop-Service Spooler -Force`). Never attempt to delete spool files while the service is active, as open file locks will cause access violations or spooler corruption.
+3. Navigate to `C:\Windows\System32\spool\PRINTERS` and delete all temporary `.SPL` (Spool file containing raw print/EMF rendering data) and `.SHD` (Shadow file containing job header, owner, and printer properties) files inside.
+4. Restart the Print Spooler service: `net start spooler` (or `Start-Service Spooler`).
+5. Reopen the print queue to confirm it is empty, and send a fresh Windows test page to confirm proper operation."
 
 ### Q5: What does Windows Installer Error 1603 mean, and how do you find the root cause?
 **A:** "Error 1603 is a generic fatal error code returned by Windows Installer (`msiexec`). To identify the exact failure point, I re-run the installation from an elevated command prompt with verbose logging enabled: `msiexec /i installer.msi /l*v C:\temp\install.log`. In the log, I search for the string 'Return value 3', which marks the exact custom action, missing prerequisite, or locked file that failed right before the installer rolled back."
@@ -59,7 +60,7 @@
 - Acknowledge (ACK): DHCP server confirms the lease, providing default gateway, subnet mask, DNS servers, and lease duration."
 
 ### Q12: How do you determine whether a network problem is caused by DNS?
-**A:** "By running the 'IP vs. Name' test. I ping a public IP address like `8.8.8.8`. If the ping succeeds, Layer 1 through Layer 3 routing is 100% operational. Then I ping `www.google.com`. If that fails with 'could not find host', the failure is definitively DNS. I then run `nslookup` to see which DNS server is failing to respond."
+**A:** "By running the 'IP vs. Name' test. I ping a public IP address like `8.8.8.8`. If the ping succeeds, Layer 1 through Layer 3 routing is 100% operational. Then I ping `www.google.com`. If that fails with 'could not find host', the failure is definitively DNS. I then run `nslookup` or PowerShell's `Resolve-DnsName` to see which DNS server is failing to respond. Crucially, I test using Layer 7 DNS query tools rather than `Test-NetConnection -Port 53`, because Test-NetConnection only verifies Layer 4 TCP port reachability, whereas standard client DNS lookups occur over UDP port 53 and require an active, responsive DNS resolver service."
 
 ### Q13: What does the command `tracert` do, and how do you interpret its output?
 **A:** "`tracert` traces the route packets take to a destination IP by sending ICMP packets with incrementing TTL (Time to Live) values. Each hop represents a router along the path. If packets start timing out (`* * * Request timed out`) after hop 1, it tells me the break point is at our local gateway router or ISP uplink, isolating whether the problem is internal or external."
@@ -94,8 +95,8 @@
 
 ### Q21b: An employee's account keeps locking out every 15 minutes after being unlocked. How do you find the source device using Event Viewer?
 **A:** "I investigate using two specific Windows Event IDs across the domain and client:
-1. **On the Domain Controller (specifically the PDC Emulator):** I open Event Viewer > Security Log and filter for **Event ID 4740** ('A user account was locked out'). In the event details, I check the **'Caller Computer Name'** field, which identifies the exact workstation, laptop, or mobile hostname where the failed authentications originated.
-2. **On the Caller Workstation/Device:** I open the local Security Log and filter for **Event ID 4625** ('An account failed to log on'). I examine the **Logon Type** (e.g., Logon Type 2 for Interactive, Logon Type 3 for Network/Exchange ActiveSync/SMB share) and the **Process Name** (e.g., `svchost.exe`, `lsass.exe`, or a mail app). This reveals whether a smartphone syncing corporate Wi-Fi with an expired password, a stale mapped drive credential in Windows Credential Manager, or a legacy background service is firing the bad attempts."
+1. **On the Domain Controller (specifically the PDC Emulator):** I open Event Viewer > Security Log and filter for **Event ID 4740** ('A user account was locked out'). (Note: While 4740 is typically consolidated on the PDC Emulator, any DC that processes the bad authentication attempt can log it). In the event details, I check the **'Caller Computer Name'** field, which identifies the exact workstation, laptop, or mobile hostname where the failed authentications originated.
+2. **On the Caller Workstation/Device:** I open the local Security Log on that source device and filter for **Event ID 4625** ('An account failed to log on'). I examine the **Logon Type** (e.g., Logon Type 2 for Interactive, Logon Type 3 for Network/Exchange ActiveSync/SMB share), the **Sub Status Code** (e.g., `0xC000006A` for bad password, `0xC0000234` for account locked), and the **Process Name** (e.g., `svchost.exe`, `lsass.exe`, or a mail app). This reveals whether a smartphone syncing corporate Wi-Fi with an expired password, a stale mapped drive credential in Windows Credential Manager, or a legacy background service is firing the bad attempts."
 
 ---
 

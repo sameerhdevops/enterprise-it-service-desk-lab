@@ -9,7 +9,7 @@
 
 ## 1. Evidence Classification Policy
 In accordance with professional engineering ethics and interview defensibility standards:
-- **Category A — Genuine Command Outputs (`evidence/command-output/`):** Real text-based outputs captured directly from the Windows 11 host machine.
+- **Category A — Genuine Command Outputs (`evidence/command-output/`):** Real text-based outputs captured directly from the Windows 11 host machine, formatted and sanitized with standard Nexora corporate enterprise hostnames and private subnets (`NEX-WS01`, `192.168.10.x`) to preserve host privacy while maintaining 100% technical accuracy.
 - **Category B — Generated Illustrative Visuals (`evidence/illustrative/`):** Vector-rendered diagrams illustrating workflows, architectures, and topologies. Prominently watermarked and labeled as `ILLUSTRATIVE / SIMULATED`. Never fabricated as vendor UI screenshots.
 - **Category C — Genuine Application Screenshots (`evidence/platform-screenshots/`):** Real screenshots captured from live application sessions. Setup guides and capture checklists provided for SaaS platforms requiring candidate cloud credentials.
 - **Category D — Automated Validation Artifacts (`evidence/validation/`):** Execution logs of automated unit tests and CSV dataset validators.
@@ -36,7 +36,7 @@ In accordance with professional engineering ethics and interview defensibility s
 | `network-topology-diagram.svg` | `illustrative/` | B | Networking | Visual 2-VLAN network design: Cisco 2911 router-on-a-stick, Cisco 2960 switch, user and server subnets. | **Illustrative Diagram** | **VERIFIED (Generated SVG)** |
 | `windows-troubleshooting-flow.svg` | `illustrative/` | B | Win Support | Decision tree for troubleshooting slow Windows systems: uptime check, Fast Startup triage, CPU/RAM/Disk. | **Illustrative Diagram** | **VERIFIED (Generated SVG)** |
 | `asset-management-lifecycle.svg` | `illustrative/` | B | Asset Management | 5-stage ITAM hardware lifecycle: Procurement -> Ingestion -> Deployment -> Maintenance -> Retirement. | **Illustrative Diagram** | **VERIFIED (Generated SVG)** |
-| `sla-reporting-dashboard.svg` | `illustrative/` | B | Reporting / MIS | Visual MIS KPI dashboard: 28 interactions, 85% FCR, 11.51h MTTR, and SLA compliance matrix. | **Illustrative Diagram** | **VERIFIED (Generated SVG)** |
+| `sla-reporting-dashboard.svg` | `illustrative/` | B | Reporting / MIS | Visual MIS KPI dashboard: 28 interactions, 85% L1 Resolution Rate, 11.51h MTTR, and SLA compliance matrix. | **Illustrative Diagram** | **VERIFIED (Generated SVG)** |
 | `screenshot-capture-guide.md` | `platform-screenshots/` | C | ITSM Platforms | Detailed step-by-step navigation paths and checklists for capturing genuine ServiceNow & JSM screenshots. | **Procedural Guide** | **DOCUMENTED (Manual Step)** |
 
 ---

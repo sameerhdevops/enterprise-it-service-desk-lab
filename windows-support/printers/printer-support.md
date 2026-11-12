@@ -54,3 +54,23 @@ Add-Printer -Name "HR-LaserJet-01" -DriverName "HP Universal Printing PCL 6" -Po
 - **Faded Print / Streaks:** Low toner cartridge or dirty laser optical glass / drum unit.
 - **Paper Jams:** Remove paper following the printer's internal guide numbering (1, 2, 3); never yank paper backwards through rollers as torn scraps lock mechanical optical sensors.
 - **Wrong Paper Size Error:** Ensure tray paper guides physically match the size setting (A4 vs Letter) in Printer Properties > Device Settings > Form To Tray Assignment.
+
+---
+
+## 5. Print Spooler Mechanics, File Architecture & Queue Recovery Safety
+
+The Windows Print Spooler service (`spoolsv.exe`) manages the spooling of print jobs from client applications to printer drivers and physical ports.
+
+### Spool Directory Architecture (`C:\Windows\System32\spool\PRINTERS`)
+When a document is sent to print, Windows creates two temporary files in the spool folder:
+1. **`.SHD` (Shadow File):** Contains job header metadata—the owner username, target printer name, document title, priority, paper size, and data format.
+2. **`.SPL` (Spool File):** Contains the actual rendered print data (typically Enhanced Metafile [EMF] or RAW printer control codes).
+
+### Critical L1 Safety Protocols:
+1. **Never Delete Spool Files While Service is Running:**  
+   Deleting `.SPL` or `.SHD` files while `spoolsv.exe` has active file handles causes file locking errors, access violations, and potential corruption of the print subsystem registry (`HKLM\SYSTEM\CurrentControlSet\Control\Print`). Always issue `Stop-Service Spooler -Force` first.
+2. **Data Loss Awareness:**  
+   Purging files from `PRINTERS\` permanently deletes all unprinted jobs currently waiting in the queue. Inform the end user that any hung or pending print jobs will be lost and must be re-sent once the spooler is restored.
+3. **Multi-User Queue Precaution:**  
+   On a shared print server (`\\NEX-PRN01`), never purge the spool directory during business hours without verifying whether other departments have pending payroll, tax, or legal print runs queued.
+

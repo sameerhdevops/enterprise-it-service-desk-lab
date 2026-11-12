@@ -33,7 +33,7 @@
    ```cmd
    nslookup www.google.com
    ```
-   - **Explain to interviewer:** *"Finally, I test DNS resolution. If pinging 8.8.8.8 works but `nslookup` or pinging google.com fails, the problem is strictly DNS. I would run `ipconfig /flushdns` and verify the adapter points to our corporate DNS server `192.168.20.10`."*
+   - **Explain to interviewer:** *"Finally, I test DNS resolution. If pinging 8.8.8.8 works but `nslookup` or pinging google.com fails, the problem is strictly DNS. Importantly, I test using Layer 7 tools like `nslookup` or PowerShell `Resolve-DnsName`, which issue actual DNS query packets, rather than just `Test-NetConnection -Port 53` which only checks Layer 4 TCP socket handshake. I would run `ipconfig /flushdns` and verify the adapter points to our corporate DNS server `192.168.10.10`."*
 
 ---
 
@@ -44,7 +44,7 @@
 1. **System Uptime & Resource Triage:**
    - Press `Ctrl + Shift + Esc` to open Task Manager.
    - Click **Performance > CPU** tab.
-   - **Explain to interviewer:** *"First, I look at the 'Up time' clock. If it shows 25 days, I know Fast Startup has preserved memory leaks across shutdowns. Next, I look at the top graphs: is CPU at 100%, Memory at 95%, or Disk pinned at 100%? That immediately narrows my investigation."*
+   - **Explain to interviewer:** *"First, I look at the 'Up time' clock. If it shows 25 days, I understand why: in Windows 10 and 11, Fast Startup hibernates the kernel session (Session 0) and drivers across shutdowns, accumulating uptime and preserving stale driver states or kernel-mode pool leaks, while persistent sleep cycles preserve user-mode application memory leaks. Next, I look at the top graphs: is CPU at 100%, Memory at 95%, or Disk pinned at 100%? That immediately narrows my investigation."*
 2. **Locate Resource Hogging Process:**
    - Switch to **Processes** tab and sort by CPU and Memory.
    - **Explain to interviewer:** *"If a user application like Chrome has 30 sub-processes or Teams is holding 4 GB of RAM, I can terminate that specific thread. If high CPU is caused by 'System Interrupts', I know it's a hardware driver or bad USB peripheral firing excessive interrupts."*
@@ -73,7 +73,7 @@
    ```
    - **Explain to interviewer:** *"In Active Directory Users and Computers or via PowerShell, I inspect the BadLogonCount. I unlock the account. If they forgot their password, I set a temporary compliant password and enforce 'User must change password at next logon'."*
 3. **Investigate Recurrent Lockouts:**
-   - **Explain to interviewer:** *"If the account locks out again within 15 minutes, I know a mobile phone, tablet, or mapped network drive is continually transmitting an old cached password. I have the user disconnect Wi-Fi on their phone, check Event ID 4740 on the Domain Controller to find the Caller Computer Name, and update the stored credentials."*
+   - **Explain to interviewer:** *"If the account locks out again within 15 minutes, I know a mobile phone, tablet, or mapped network drive is continually transmitting an old cached password. I check Event ID 4740 on the Domain Controller Security log (typically on the PDC Emulator) to identify the 'Caller Computer Name'. Once I have the source device, I inspect its local Security log for Event ID 4625 to identify the exact process or service firing the bad attempts, clear the stale entry in Windows Credential Manager, and verify the user can work without further lockouts."*
 
 ---
 
@@ -109,8 +109,10 @@
 3. **Inspect Port Configuration (WSD vs TCP/IP):**
    - In Printer Properties > Ports tab.
    - **Explain to interviewer:** *"If Windows configured the printer on a WSD (Web Services for Devices) port, it often goes offline when the printer sleeps. I switch the port to a Standard TCP/IP Port bound to static IP `192.168.10.25`."*
-4. **Restart Print Spooler & Send Test Page:**
+4. **Clear Spooler Queue Safely & Send Test Page:**
    ```powershell
-   Restart-Service -Name Spooler -Force
+   Stop-Service -Name Spooler -Force
+   Remove-Item -Path "C:\Windows\System32\spool\PRINTERS\*" -Force
+   Start-Service -Name Spooler
    ```
-   - Print Windows Test page; verify job clears and physically prints.
+   - **Explain to interviewer:** *"If jobs are stuck in 'Deleting...', I explain the safety steps: stop the Spooler service first so files are not locked by `spoolsv.exe`, purge the `.SPL` (raw spool data) and `.SHD` (shadow header) files from `C:\Windows\System32\spool\PRINTERS`, and restart the service. I notify the user that any hung print jobs were cleared and need to be resent. Finally, I print a Windows Test page to confirm clean end-to-end spooling and printing."*

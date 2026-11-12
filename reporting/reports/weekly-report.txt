@@ -11,7 +11,7 @@ EXECUTIVE SUMMARY:
   Total Incident Tickets:            20
   Total Service Requests:            8
   Mean Time to Resolve (MTTR):       11.51 hours (Over 17 resolved incidents)
-  First Contact Resolution (FCR):    85.0% (17 resolved at L1)
+  L1 Resolution Rate (Non-Escalated):85.0% (17 resolved at L1 without escalation)
   Total Escalated to L2/L3:          3 (15.0%)
 ---------------------------------------------------------------------------
 INCIDENTS BY ASSIGNMENT GROUP:

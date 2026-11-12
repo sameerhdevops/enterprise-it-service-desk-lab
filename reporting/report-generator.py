@@ -291,10 +291,10 @@ def generate_weekly_mis(incidents, service_requests=None):
                     pass
     avg_res_time = (sum(res_times) / len(res_times)) if res_times else 0.0
     
-    # Escalation metrics
+    # Escalation and L1 Resolution metrics (Non-Escalated)
     escalated_count = sum(1 for inc in incidents if inc.get('Status') == 'Escalated' or inc.get('EscalatedTo', '').strip() not in ['', '—', '-'])
-    fcr_count = sum(1 for inc in incidents if inc.get('Status') in ['Resolved', 'Closed'] and inc.get('EscalatedTo', '').strip() in ['', '—', '-'])
-    fcr_rate = (fcr_count / total_inc * 100) if total_inc else 0.0
+    l1_resolved_count = sum(1 for inc in incidents if inc.get('Status') in ['Resolved', 'Closed'] and inc.get('EscalatedTo', '').strip() in ['', '—', '-'])
+    l1_res_rate = (l1_resolved_count / total_inc * 100) if total_inc else 0.0
 
     lines = list(DISCLAIMER_HEADER)
     lines.extend([
@@ -307,7 +307,7 @@ def generate_weekly_mis(incidents, service_requests=None):
         f"  Total Incident Tickets:            {total_inc}",
         f"  Total Service Requests:            {total_sr}",
         f"  Mean Time to Resolve (MTTR):       {avg_res_time:.2f} hours (Over {len(res_times)} resolved incidents)",
-        f"  First Contact Resolution (FCR):    {fcr_rate:.1f}% ({fcr_count} resolved at L1)",
+        f"  L1 Resolution Rate (Non-Escalated):{l1_res_rate:.1f}% ({l1_resolved_count} resolved at L1 without escalation)",
         f"  Total Escalated to L2/L3:          {escalated_count} ({(escalated_count/total_inc*100 if total_inc else 0.0):.1f}%)",
         "-" * 75,
         "INCIDENTS BY ASSIGNMENT GROUP:",
