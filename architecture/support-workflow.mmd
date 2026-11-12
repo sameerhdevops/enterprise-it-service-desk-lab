@@ -1,0 +1,52 @@
+%% Enterprise IT Service Desk Lab — Incident Support Workflow
+%% End-to-end flow from user report to resolution or escalation
+
+flowchart TD
+    START(["User reports issue"])
+
+    START --> CHANNEL{"Channel?"}
+    CHANNEL -->|Portal| PORTAL["User submits ticket\nvia self-service portal"]
+    CHANNEL -->|Email| EMAIL["Email received at\nsupport@nexora.tech"]
+    CHANNEL -->|Phone| PHONE["L1 takes call,\nlogs ticket manually"]
+
+    PORTAL --> TICKET["Ticket created in\nServiceNow / Jira"]
+    EMAIL --> TICKET
+    PHONE --> TICKET
+
+    TICKET --> CATEGORIZE["Categorize & Prioritize\n(Impact + Urgency → Priority)"]
+
+    CATEGORIZE --> ASSIGN["Assign to L1\nSupport Engineer"]
+
+    ASSIGN --> DIAGNOSE["Initial Diagnosis\n- Check KB for known issue\n- Gather user details\n- Check system status"]
+
+    DIAGNOSE --> KNOWN{"Known issue\nwith KB article?"}
+
+    KNOWN -->|Yes| FOLLOW_KB["Follow KB procedure\nApply documented fix"]
+    KNOWN -->|No| TROUBLESHOOT["Systematic troubleshooting\n- Reproduce issue\n- Check logs/events\n- Test basic fixes"]
+
+    FOLLOW_KB --> VERIFY{"Issue resolved?"}
+    TROUBLESHOOT --> VERIFY
+
+    VERIFY -->|Yes| RESOLVE["Document resolution\nin ticket"]
+    VERIFY -->|No| SCOPE{"Within L1 scope?"}
+
+    SCOPE -->|Yes, more to try| TROUBLESHOOT
+    SCOPE -->|No| ESCALATE["Escalate to L2\n- Document steps taken\n- Attach evidence\n- Set escalation notes"]
+
+    RESOLVE --> UPDATE_KB{"New or updated\nKB article needed?"}
+    UPDATE_KB -->|Yes| WRITE_KB["Write / update\nKB article"]
+    UPDATE_KB -->|No| NOTIFY
+
+    WRITE_KB --> NOTIFY["Notify user\nof resolution"]
+
+    ESCALATE --> NOTIFY_ESC["Notify user\nof escalation"]
+
+    NOTIFY --> CLOSE["Close ticket\nUpdate metrics"]
+    NOTIFY_ESC --> HANDOVER["Add to shift handover\nif end of shift"]
+
+    CLOSE --> REPORT["Data feeds into\nreporting/analytics"]
+    HANDOVER --> REPORT
+
+    ESCALATE --> L2["L2 / Specialist\nreceives escalation"]
+    L2 --> L2_RESOLVE["L2 resolves issue"]
+    L2_RESOLVE --> RESOLVE

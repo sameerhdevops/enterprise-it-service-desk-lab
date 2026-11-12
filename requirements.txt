@@ -1,0 +1,3 @@
+# Enterprise IT Service Desk Lab - Python Dependencies
+# Only standard library is required for core functionality.
+# No external packages needed.

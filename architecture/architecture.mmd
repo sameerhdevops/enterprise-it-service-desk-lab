@@ -1,0 +1,74 @@
+%% Enterprise IT Service Desk Lab — Architecture Overview
+%% Shows module relationships and tool mapping
+
+flowchart TD
+    subgraph Company["Nexora Technologies (~25 employees)"]
+        HR["HR Department"]
+        FIN["Finance Department"]
+        OPS_D["Operations Department"]
+        IT_D["IT Department"]
+    end
+
+    subgraph Channels["Support Channels"]
+        PORTAL["Self-Service Portal"]
+        EMAIL["Email (support@nexora.tech)"]
+        PHONE["Phone (Internal Ext.)"]
+    end
+
+    subgraph ServiceDesk["Service Desk (L1)"]
+        TRIAGE["Triage & Categorize"]
+        RESOLVE["Troubleshoot & Resolve"]
+        ESCALATE["Escalate to L2"]
+        DOCUMENT["Document & Close"]
+    end
+
+    subgraph Tools["Tool Landscape"]
+        SN["ServiceNow PDI"]
+        JIRA["Jira Service Management"]
+        PS["PowerShell 5.1"]
+        PY["Python 3.14"]
+        PT["Cisco Packet Tracer"]
+        GIT["Git 2.55.0"]
+    end
+
+    subgraph LabModules["Lab Modules"]
+        ITSM["itsm/"]
+        INCIDENTS["incidents/"]
+        KB["knowledge-base/"]
+        AD["active-directory/"]
+        NETWORKING["networking/"]
+        WINDOWS["windows-support/"]
+        M365["microsoft-365/"]
+        ASSETS["asset-management/"]
+        REPORTING["reporting/"]
+        COMMS["communication/"]
+        ITIL["itil-processes/"]
+        OPERATIONS["operations/"]
+    end
+
+    Company --> Channels
+    Channels --> TRIAGE
+    TRIAGE --> RESOLVE
+    RESOLVE -->|Fixed| DOCUMENT
+    RESOLVE -->|Beyond L1| ESCALATE
+    ESCALATE --> DOCUMENT
+
+    SN --> ITSM
+    JIRA --> ITSM
+    PS --> WINDOWS
+    PS --> AD
+    PY --> REPORTING
+    PT --> NETWORKING
+    GIT --> LabModules
+
+    INCIDENTS --> ITSM
+    INCIDENTS --> WINDOWS
+    INCIDENTS --> NETWORKING
+    INCIDENTS --> M365
+    INCIDENTS --> AD
+    INCIDENTS --> KB
+    INCIDENTS --> ASSETS
+    INCIDENTS --> COMMS
+    ITIL -.->|Framework| INCIDENTS
+    ITIL -.->|Framework| ITSM
+    ITIL -.->|Framework| OPERATIONS
