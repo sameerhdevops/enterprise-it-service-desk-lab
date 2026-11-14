@@ -80,20 +80,48 @@ def verify_password(password: str, salt: str, expected_hash: str) -> bool:
     key, _ = hash_password(password, salt)
     return secrets.compare_digest(key, expected_hash)
 
-def get_or_create_bootstrap_password() -> str:
+def protect_local_file(filepath: str):
+    """
+    Applies restrictive operating system filesystem permissions to a local credentials file:
+    - On Windows NTFS: Uses icacls to remove inheritance and grant Full Control strictly
+      to the current user (%USERNAME%) and BUILTIN\\Administrators (*S-1-5-32-544).
+    - On POSIX / Linux: Uses chmod 0600 (owner read/write only).
+    """
+    if not os.path.exists(filepath):
+        return
+    if os.name == "nt":
+        try:
+            import subprocess
+            username = os.environ.get("USERNAME")
+            if username:
+                subprocess.run(
+                    ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
+                    capture_output=True,
+                    check=False
+                )
+        except Exception as e:
+            print(f"[WARN] Failed to apply Windows ACLs on {filepath}: {e}", file=sys.stderr)
+    elif hasattr(os, "chmod"):
+        try:
+            os.chmod(filepath, 0o600)
+        except OSError as e:
+            print(f"[WARN] Failed to chmod 0600 on {filepath}: {e}", file=sys.stderr)
+
+def get_or_create_bootstrap_password(creds_file: str = LOCAL_CREDENTIALS_FILE) -> str:
     """
     Obtains the initial bootstrap password for alex.chen from:
     1. NEXORA_PORTAL_ADMIN_PASS environment variable, or
     2. Local ignored secrets file (.local_credentials.json), or
     3. Securely generated random token saved to .local_credentials.json
+    Protected by local operating system filesystem ACLs.
     """
     env_pass = os.environ.get("NEXORA_PORTAL_ADMIN_PASS")
     if env_pass:
         return env_pass.strip()
 
-    if os.path.exists(LOCAL_CREDENTIALS_FILE):
+    if os.path.exists(creds_file):
         try:
-            with open(LOCAL_CREDENTIALS_FILE, "r", encoding="utf-8") as f:
+            with open(creds_file, "r", encoding="utf-8") as f:
                 creds = json.load(f)
                 if "bootstrap_password" in creds:
                     return creds["bootstrap_password"]
@@ -102,22 +130,62 @@ def get_or_create_bootstrap_password() -> str:
 
     generated_pass = secrets.token_urlsafe(16)
     try:
-        with open(LOCAL_CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+        with open(creds_file, "w", encoding="utf-8") as f:
             json.dump({
                 "username": "alex.chen",
                 "bootstrap_password": generated_pass,
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "note": "Local bootstrap secret for IT Service Desk. Ignored by Git."
+                "note": "Local credential store for IT Service Desk. Ignored by Git."
             }, f, indent=2)
-        if hasattr(os, "chmod"):
-            try:
-                os.chmod(LOCAL_CREDENTIALS_FILE, 0o600)
-            except OSError:
-                pass
+        protect_local_file(creds_file)
     except Exception as e:
         print(f"[WARN] Could not write local credentials file: {e}", file=sys.stderr)
 
     return generated_pass
+
+def migrate_or_rotate_user_credentials(db_path: str, username: str = "alex.chen", new_password: str = None, creds_file: str = LOCAL_CREDENTIALS_FILE) -> str:
+    """
+    Rotates credentials for a user in an existing database without deleting, modifying,
+    or recreating any tickets or ticket activity logs.
+    Saves the new credential to creds_file and protects it with OS-level permissions.
+    """
+    if not new_password:
+        new_password = secrets.token_urlsafe(16)
+    
+    pwd_hash, salt = hash_password(new_password)
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    c.execute("SELECT id, username FROM users WHERE username = ?", (username,))
+    row = c.fetchone()
+    if row:
+        c.execute("""
+        UPDATE users
+        SET password_hash = ?, salt = ?
+        WHERE username = ?
+        """, (pwd_hash, salt, username))
+    else:
+        c.execute("""
+        INSERT INTO users (username, full_name, role, password_hash, salt, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (username, "Alex Chen (L1 Lead)", "agent", pwd_hash, salt, now_str))
+    conn.commit()
+    conn.close()
+
+    try:
+        with open(creds_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "username": username,
+                "bootstrap_password": new_password,
+                "rotated_at": now_str,
+                "note": "Local credential store for IT Service Desk. Ignored by Git."
+            }, f, indent=2)
+        protect_local_file(creds_file)
+    except Exception as e:
+        print(f"[WARN] Could not write updated credentials file: {e}", file=sys.stderr)
+
+    return new_password
 
 def init_db(db_path=DEFAULT_DB_FILE):
     conn = sqlite3.connect(db_path)
@@ -189,6 +257,29 @@ def init_db(db_path=DEFAULT_DB_FILE):
         VALUES (?, ?, ?, ?, ?, ?)
         """, ("alex.chen", "Alex Chen (L1 Lead)", "agent", pwd_hash, salt, now_str))
         conn.commit()
+    else:
+        # Check for legacy password hash on existing alex.chen user and rotate safely
+        c.execute("SELECT id, username, password_hash, salt FROM users WHERE username = 'alex.chen'")
+        alex_row = c.fetchone()
+        if alex_row:
+            user_id, username, stored_hash, stored_salt = alex_row
+            # Check if legacy default password is in use
+            if verify_password("NexoraSupport#2026", stored_salt, stored_hash):
+                new_pass = secrets.token_urlsafe(16)
+                new_hash, new_salt = hash_password(new_pass)
+                c.execute("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", (new_hash, new_salt, user_id))
+                conn.commit()
+                try:
+                    with open(LOCAL_CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+                        json.dump({
+                            "username": "alex.chen",
+                            "bootstrap_password": new_pass,
+                            "migrated_at": datetime.now(timezone.utc).isoformat(),
+                            "note": "Migrated from legacy credentials. Local secret store protected by OS ACLs."
+                        }, f, indent=2)
+                    protect_local_file(LOCAL_CREDENTIALS_FILE)
+                except Exception as e:
+                    print(f"[WARN] Failed to write migrated credentials file: {e}", file=sys.stderr)
 
     # Check if seed tickets exist
     c.execute("SELECT COUNT(*) FROM tickets")
@@ -339,25 +430,60 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             return None
         return sess
 
+    def is_valid_origin_url(self, url_str: str) -> bool:
+        """Validates that a URL matches the allowed scheme, hostname, and server port."""
+        if not url_str:
+            return False
+        try:
+            parsed = urllib.parse.urlparse(url_str)
+        except Exception:
+            return False
+
+        # Validate scheme: must be http or https
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        # Validate hostname: must be localhost, 127.0.0.1, or bound server host
+        allowed_hosts = {"127.0.0.1", "localhost"}
+        server_host = self.server.server_address[0]
+        if server_host and server_host != "0.0.0.0":
+            allowed_hosts.add(server_host)
+            
+        if parsed.hostname not in allowed_hosts:
+            return False
+
+        # Validate port: must match server listening port exactly
+        server_port = self.server.server_address[1]
+        origin_port = parsed.port if parsed.port is not None else (80 if parsed.scheme == "http" else 443)
+        if origin_port != server_port:
+            return False
+
+        return True
+
     def verify_csrf_and_origin(self) -> bool:
         """
         Enforces same-origin request verification on mutating POST endpoints.
-        Rejects cross-origin POSTs and ensures valid Origin/Referer headers.
+        Validates the complete allowed origin including scheme, hostname, and port.
+        Rejects cross-origin POSTs, port mismatches (e.g. port 9000 vs 8080),
+        unexpected schemes, or untrusted hostnames.
+        Requires valid Origin/Referer on all mutating requests to prevent cookie-authenticated CSRF.
         """
         origin = self.headers.get("Origin")
         referer = self.headers.get("Referer")
-        allowed_hosts = ("127.0.0.1", "localhost")
+
+        # Mutating requests require either an Origin or Referer header
+        if not origin and not referer:
+            self.send_json({"status": "error", "message": "Forbidden: Origin or Referer header required for mutating request."}, 403)
+            return False
 
         if origin:
-            parsed = urllib.parse.urlparse(origin)
-            if parsed.hostname not in allowed_hosts:
-                self.send_json({"status": "error", "message": "Forbidden: Cross-origin requests not permitted."}, 403)
+            if not self.is_valid_origin_url(origin):
+                self.send_json({"status": "error", "message": "Forbidden: Untrusted or cross-origin Origin header."}, 403)
                 return False
 
         if referer:
-            parsed = urllib.parse.urlparse(referer)
-            if parsed.hostname not in allowed_hosts:
-                self.send_json({"status": "error", "message": "Forbidden: Invalid referer host."}, 403)
+            if not self.is_valid_origin_url(referer):
+                self.send_json({"status": "error", "message": "Forbidden: Untrusted or cross-origin Referer header."}, 403)
                 return False
 
         return True
@@ -841,14 +967,19 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         computed = [compute_ticket_sla(r, now) for r in rows]
         self.send_json({"export_timestamp": now.isoformat(), "count": len(computed), "tickets": computed})
 
+    def send_security_headers(self, content_type: str = "text/html; charset=utf-8"):
+        """Emits standard security response headers across HTML and API responses."""
+        self.send_header('Content-Type', content_type)
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-Frame-Options', 'SAMEORIGIN')
+        self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';")
+
     def send_json(self, data, code=200, headers=None):
         body = json.dumps(data, indent=2).encode('utf-8')
         self.send_response(code)
-        self.send_header('Content-Type', 'application/json')
+        self.send_security_headers('application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
-        self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('X-Frame-Options', 'SAMEORIGIN')
-        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;")
         if headers:
             for k, v in headers:
                 self.send_header(k, v)
@@ -1075,9 +1206,8 @@ async function trackTicket() {
 </html>
 """
         self.send_response(200)
-        self.send_header('Content-Type', 'text/html; charset=utf-8')
-        self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('X-Frame-Options', 'SAMEORIGIN')
+        self.send_security_headers('text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(html_content.encode('utf-8'))))
         self.end_headers()
         self.wfile.write(html_content.encode('utf-8'))
 
@@ -1506,9 +1636,8 @@ async function postComment(key, type, customMsg) {
 </html>
 """
         self.send_response(200)
-        self.send_header('Content-Type', 'text/html; charset=utf-8')
-        self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('X-Frame-Options', 'SAMEORIGIN')
+        self.send_security_headers('text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(html_content.encode('utf-8'))))
         self.end_headers()
         self.wfile.write(html_content.encode('utf-8'))
 

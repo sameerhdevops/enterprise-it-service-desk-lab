@@ -23,7 +23,7 @@ All modules, platforms, and deliverables are categorized using standardized oper
 | **Host Environment** | Windows 11 Enterprise (Build 26300), Python 3.14.7, PowerShell 5.1 | **IMPLEMENTED & VERIFIED** | Verified directly on host machine; real specs logged in `evidence/command-output/os-architecture.txt`. |
 | **Workspace & Repository** | Clean directory tree, `.gitignore`, `requirements.txt`, Git repo | **IMPLEMENTED & VERIFIED** | Initialized cleanly in `D:\Projects\enterprise-it-service-desk-lab`; git history preserved. |
 | **Foundation & Architecture** | `README.md`, Architecture diagrams (`.mmd`), Environment details, Support model, Design decisions | **IMPLEMENTED & VERIFIED** | 5 core architecture documents, 2 standalone Mermaid diagrams, comprehensive README. |
-| **ITSM Platform & Portal** | Interactive Web Service Desk (`itsm/portal/app.py`), 10 request types, 10 queues | **DEPLOYED & VERIFIED** | Live portal verified with functional HTTP test suite (`scripts/test_service_desk_platform.py`); PBKDF2 authentication, CSRF/same-origin protection, customer token security, dynamic SLA timers, and XSS defense verified; 15/15 tests passing, exported to `evidence/itsm/live-service-desk-export.json`. |
+| **ITSM Platform & Portal** | Interactive Web Service Desk (`itsm/portal/app.py`), 10 request types, 10 queues | **DEPLOYED & VERIFIED** | Live portal verified with functional HTTP test suite (`scripts/test_service_desk_platform.py`); PBKDF2 authentication, complete CSRF/origin validation (scheme, host, port), security headers & CSP, customer token security, dynamic SLA timers, stored XSS defense, and DB credential migration verified; 17/17 tests passing, exported to `evidence/itsm/live-service-desk-export.json`. |
 | **ServiceNow PDI & JSM Cloud** | Configuration runbooks, field dictionaries, SLA definitions, REST API schemas | **DOCUMENTED / REFERENCE** | Full data dictionaries, choice lists, assignment groups, and SLA rules documented as architecture references. Live SaaS instances marked as Out of Final Scope (zero-cost local alternative fully deployed). |
 | **Windows Support Lab** | 15 detailed troubleshooting runbooks, 5 domain support guides | **IMPLEMENTED & VERIFIED** | 15 runbooks in `windows-support/runbooks/` with all required sections; 5 domain guides; Fast Startup kernel hibernation vs cold reboot and CPU wait chain analysis documented. |
 | **Active Directory Admin** | Samba 4 AD DC (`nexora.test`) on WSL2 Ubuntu, Kerberos KDC, LDAP, 12 users | **DEPLOYED & VERIFIED** | Fully provisioned non-destructive Samba AD DC; Kerberos ticket verification (`kinit`/`klist`), DNS SRV lookup, target hostname resolution, textbook AGDLP group nesting (`GG-*` -> `DL-*`), and SMB share access controls verified in `evidence/active-directory/samba-ad-dc-verification.txt`. Credentials rotated and stored in git-ignored `.ad_credentials.json`. |
@@ -72,14 +72,16 @@ Ran 13 tests in 0.024s | Result: OK (100% Pass)
 [TEST 7] Customer Token Protection: Ticket lookup secured with HTTP 401 [PASS]
 [TEST 8] CSRF & Same-Origin Gate: Cross-origin mutating requests blocked with HTTP 403 [PASS]
 [TEST 9] State Machine Enforcement: Illegal transition 'New' -> 'Closed' blocked [PASS]
-[TEST 10] Sequential State Machine Progression to Resolution [PASS]
-[TEST 11] Ticket Reopening Lifecycle Regression: resolved_at reset & recalculation [PASS]
-[TEST 12] Comment Segregation: Internal work notes protected from public exposure [PASS]
-[TEST 13] Stored XSS Defense: Malicious payloads handled safely [PASS]
-[TEST 14] 10 Operational Queues Verification [PASS]
-[TEST 15] Export API & Metric Integrity: Verified 17 records; resolved_ticket_share=47.1% [PASS]
+[TEST 10] State Machine Enforcement: Illegal transition blocked [PASS]
+[TEST 11] Sequential State Machine Progression to Resolution [PASS]
+[TEST 12] Ticket Reopening Lifecycle Regression: resolved_at reset & recalculation [PASS]
+[TEST 13] Comment Segregation: Internal work notes protected from public exposure [PASS]
+[TEST 14] Stored XSS Defense: Malicious payloads sanitized; cannot execute [PASS]
+[TEST 15] 10 Operational Queues Verification [PASS]
+[TEST 16] Export API & Metric Integrity: Verified 17 records; resolved_ticket_share=47.1% [PASS]
+[TEST 17] Existing Database Credential Migration & Ticket Preservation [PASS]
 
-Result: 15/15 Passed (100% Pass)
+Result: 17/17 Passed (100% Pass)
 ```
 
 ### Dataset Integrity Validator (`scripts/validate-data.py`)

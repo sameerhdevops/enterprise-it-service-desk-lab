@@ -123,7 +123,7 @@ Demonstrate practical PowerShell diagnostic commands on the host:
    ```bash
    python scripts/test_service_desk_platform.py
    ```
-   *Point out:* 15/15 HTTP API integration tests passing (CSRF, auth, state machine, customer tokens, input validation).
+   *Point out:* 17/17 HTTP API integration tests passing (complete CSRF/origin validation, auth, state machine, customer tokens, security headers, input validation, DB migration).
 4. Run dataset integrity validation:
    ```bash
    python scripts/validate-data.py

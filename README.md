@@ -86,7 +86,7 @@ Clone and test the entire lab environment locally. All scripts use standard libr
 git clone https://github.com/sameerhdevops/enterprise-it-service-desk-lab.git
 cd enterprise-it-service-desk-lab
 
-# 1. Run the Service Desk test suite (15/15 tests passing)
+# 1. Run the Service Desk test suite (17/17 tests passing)
 python scripts/test_service_desk_platform.py
 
 # 2. Launch the interactive Service Desk Platform (Customer Portal & Agent Console)

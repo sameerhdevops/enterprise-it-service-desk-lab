@@ -46,13 +46,39 @@
     - ICMP Echo (ping diagnostics)
   - **Server Response Traffic:** When servers in VLAN 20 respond to client requests, their packets enter `Gi0/1.20 in` (where ACL 101 is NOT applied) and exit `Gi0/1.10 out` (where ACL 101 is NOT applied). This prevents valid return traffic from being blocked by the final `deny ip any any log` rule.
 
-### C. Password Security & Obfuscation Limitations
+### C. Active Directory Service Port Policy & Internal DNS
+- **Strict Least Privilege:** ACL 101 permits only the necessary communication paths between corporate workstations (`192.168.10.0/24`) and the primary Domain Controller (`192.168.20.10`):
+  - **SMB / CIFS (TCP 445):** Department file shares (`CompanyShared`, `HR-Private`, `Finance-Private`, `IT-Admin`).
+  - **Kerberos Authentication (TCP/UDP 88):** User TGT and TGS ticket issuance.
+  - **Kerberos Password Change (TCP/UDP 464):** Self-service and technician password rotation.
+  - **Active Directory LDAP (TCP/UDP 389):** Directory queries, user lookups, and group membership verification.
+  - **Internal Domain DNS (UDP/TCP 53):** Name resolution strictly directed to DC `192.168.20.10` for `nexora.test` realm resolution and public forwarding.
+  - **ICMP Echo:** Network reachability verification.
+- **Enterprise Multi-DC Context:** In a multi-DC enterprise environment, additional ports like RPC Endpoint Mapper (TCP 135), dynamic RPC high ports (49152–65535), and Global Catalog (TCP 3268) are required for replication. For this isolated single-DC office topology, restricting access strictly to core client service ports minimizes attack surface while fully supporting workstation operations.
+
+### D. SSH Initialization & Key Generation Requirements
+- **Cryptographic Prerequisites:** Cisco IOS devices reject SSH connection requests (`transport input ssh`) until an RSA key pair is generated. Plaintext running configuration files do not export private keys.
+- **Required Initialization Commands:**
+  ```cisco
+  NEX-RTR01(config)# ip domain-name nexora.test
+  NEX-RTR01(config)# crypto key generate rsa modulus 2048
+  NEX-RTR01(config)# ip ssh version 2
+  NEX-RTR01(config)# ip ssh time-out 60
+  NEX-RTR01(config)# ip ssh authentication-retries 3
+  ```
+- **Switch Requirements:** On Catalyst switches (`SW-CORE-01`), ensure a cryptographic IOS image (k9) is loaded before executing key generation. If keys are omitted, the IOS VTY daemon prevents inbound SSH sessions.
+
+### E. Password Security & Obfuscation Limitations
 - **Type 7 Passwords Removed:** Cisco Type 7 passwords (`service password-encryption`) use a trivially reversible XOR/Vigenère cipher dating to the 1990s and must never be considered true encryption.
 - **Configurable Placeholders:** The running configs utilize standard `login local` and administrative secret placeholders (`<LOCAL_ADMIN_SECRET>`, `<LOCAL_ENABLE_SECRET>`) for safe local operator configuration.
 
 ---
 
 ## 4. Cisco IOS Configuration Deployment Guide
+
+> [!NOTE]
+> **Scope & Simulation Integrity Notice:**
+> There is **no binary `.pkt` file** in this repository. All Cisco IOS configuration files (`nexora-rtr01-running-config.ios` and `nexora-sw01-running-config.ios`) are classified as **Implemented Configuration Artifacts**, and this deployment walkthrough is classified as **Documented Reference Material**. They provide genuine, syntax-verified Cisco IOS configurations ready to paste directly into Cisco Packet Tracer or physical lab hardware.
 
 ### Router Configuration (`NEX-RTR01`)
 File: [networking/packet-tracer/nexora-rtr01-running-config.ios](file:///d:/Projects/enterprise-it-service-desk-lab/networking/packet-tracer/nexora-rtr01-running-config.ios)

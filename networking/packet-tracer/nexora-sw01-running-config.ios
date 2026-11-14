@@ -15,6 +15,14 @@ hostname SW-CORE-01
 username admin privilege 15 secret <LOCAL_ADMIN_SECRET>
 enable secret <LOCAL_ENABLE_SECRET>
 !
+! Domain Name & SSH Configuration
+! Note: Cisco Catalyst IOS requires crypto image (k9) and generated RSA keys for SSH:
+! SW-CORE-01(config)# crypto key generate rsa modulus 2048
+ip domain-name nexora.test
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+!
 ! VLAN Database
 vlan 10
  name Corp_Users

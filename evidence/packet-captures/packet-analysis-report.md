@@ -9,7 +9,7 @@
 | **File Size** | 3776 bytes |
 | **Total Captured Frames** | 20 frames |
 | **BPF Capture Filter** | `icmp or (tcp and port 8085) or (port 53 and (host 127.0.0.1 or host ::1))` |
-| **Verification Status** | **DEPLOYED & VERIFIED** (Clean execution, zero errors) |
+| **Verification Status** | **IMPLEMENTED & VERIFIED** (Clean execution, zero errors, all assertions passed) |
 
 ---
 
@@ -46,7 +46,7 @@ All 8 standard Wireshark display filters were executed against the native PCAP f
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as curl client (127.0.0.1:35960)
+    actor Client as curl client (127.0.0.1:48592)
     participant Server as HTTP Server (127.0.0.1:8085)
 
     Note over Client,Server: Phase 1: TCP Three-Way Handshake
@@ -59,14 +59,14 @@ sequenceDiagram
     Server->>Client: [Frame 16] HTTP/1.0 200 OK
 ```
 
-1. **Step 1 (SYN) — Frame 9** (t=1.139327000s):
-   - **Source:** 127.0.0.1:35960 -> **Destination:** 127.0.0.1:8085
+1. **Step 1 (SYN) — Frame 9** (t=1.114356000s):
+   - **Source:** 127.0.0.1:48592 -> **Destination:** 127.0.0.1:8085
    - Flags: `SYN=1, ACK=0`. Client initiates TCP connection to port 8085.
-2. **Step 2 (SYN-ACK) — Frame 10** (t=1.139341000s):
-   - **Source:** 127.0.0.1:8085 -> **Destination:** 127.0.0.1:35960
+2. **Step 2 (SYN-ACK) — Frame 10** (t=1.114372000s):
+   - **Source:** 127.0.0.1:8085 -> **Destination:** 127.0.0.1:48592
    - Flags: `SYN=1, ACK=1`. Server accepts connection and acknowledges initial sequence number.
-3. **Step 3 (ACK) — Frame 11** (t=1.139349000s):
-   - **Source:** 127.0.0.1:35960 -> **Destination:** 127.0.0.1:8085
+3. **Step 3 (ACK) — Frame 11** (t=1.114383000s):
+   - **Source:** 127.0.0.1:48592 -> **Destination:** 127.0.0.1:8085
    - Flags: `ACK=1`. Connection is `ESTABLISHED`.
 4. **Step 4 (HTTP GET) — Frame 12**:
    - `HTTP GET /` requested.
@@ -79,7 +79,7 @@ sequenceDiagram
 
 - **Echo Request (Type 8, Code 0) — Frame 1** (t=0.000000000s):
   `127.0.0.1 -> 127.0.0.1`, Length 84 bytes.
-- **Echo Reply (Type 0, Code 0) — Frame 2** (t=0.000008000s):
+- **Echo Reply (Type 0, Code 0) — Frame 2** (t=0.000020000s):
   `127.0.0.1 -> 127.0.0.1`, Length 84 bytes (RTT < 0.1 ms).
 - **Diagnostic Finding:** Confirms OS network kernel ICMP driver is responsive and operational.
 

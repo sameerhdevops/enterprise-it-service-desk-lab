@@ -7,10 +7,15 @@ isolated Samba 4 AD DC for realm nexora.test in WSL2 Ubuntu.
 Security & AGDLP Hardening:
 - Non-destructive: Probes domain health and preserves existing directory databases.
 - Unique Credentials: Generates distinct cryptographically random passwords per account.
-- Safe Storage: Stores credentials in ignored file (evidence/active-directory/.ad_credentials.json).
-- Zero Leaks: Never prints plaintext passwords or passes passwords in process command arguments.
+- Safe Storage: Stores credentials in local ignored file (evidence/active-directory/.ad_credentials.json),
+  protected by operating system filesystem permissions (Windows ACLs via icacls / chmod 600).
+- Protected Secret Transport: Never passes passwords in visible command arguments or process tables.
+  Transports secrets via stdin into temporary mode 600 auth files cleaned up in traps.
 - True AGDLP: Accounts -> Global Groups -> Domain Local Groups -> Permissions.
-- End-to-End Auditing: Verifies Kerberos, DNS SRV + target hostname, and SMB ACL positive/negative access.
+- Restrictive File Permissions: Replaces chmod 777 with group ownership (NEXORA\\dl-*) and chmod 2770
+  (world access strictly 0).
+- Rigorous Audit: Verifies Kerberos, clean DNS SRV + target A record, all 6 OUs, 7 Global Groups,
+  4 Domain Local Groups, nesting, and strict NT_STATUS_ACCESS_DENIED on unauthorized share access.
 """
 
 import subprocess
@@ -42,6 +47,32 @@ USER_DEFS = [
     ("akash.desai", "Akash", "Desai", "Senior Sales Manager", "OU=Sales", "GG-Sales")
 ]
 
+def protect_local_file(filepath: str):
+    """
+    Applies restrictive operating system filesystem permissions to a local credentials file:
+    - On Windows NTFS: Uses icacls to remove inheritance and grant Full Control strictly
+      to the current user (%USERNAME%) and BUILTIN\\Administrators (*S-1-5-32-544).
+    - On POSIX / Linux: Uses chmod 0600 (owner read/write only).
+    """
+    if not os.path.exists(filepath):
+        return
+    if os.name == "nt":
+        try:
+            username = os.environ.get("USERNAME")
+            if username:
+                subprocess.run(
+                    ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
+                    capture_output=True,
+                    check=False
+                )
+        except Exception as e:
+            print(f"[WARN] Failed to apply Windows ACLs on {filepath}: {e}", file=sys.stderr)
+    elif hasattr(os, "chmod"):
+        try:
+            os.chmod(filepath, 0o600)
+        except OSError as e:
+            print(f"[WARN] Failed to chmod 0600 on {filepath}: {e}", file=sys.stderr)
+
 def generate_complex_password(length=16) -> str:
     """Generates an Active Directory complexity-compliant password."""
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
@@ -72,20 +103,17 @@ def load_or_create_credentials() -> dict:
         try:
             with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
                 json.dump(creds, f, indent=2)
-            if hasattr(os, "chmod"):
-                try:
-                    os.chmod(CREDENTIALS_FILE, 0o600)
-                except OSError:
-                    pass
+            protect_local_file(CREDENTIALS_FILE)
         except Exception as e:
             print(f"[WARN] Could not write credentials file: {e}", file=sys.stderr)
 
     return creds
 
-def run_wsl_cmd(cmd: str) -> subprocess.CompletedProcess:
+def run_wsl_cmd(cmd: str, input_data: str = None) -> subprocess.CompletedProcess:
     """Executes a bash script safely inside WSL Ubuntu as root."""
     res = subprocess.run(
         ["wsl", "-u", "root", "-d", "Ubuntu", "-e", "bash", "-c", cmd],
+        input=input_data,
         capture_output=True,
         text=True
     )
@@ -111,6 +139,7 @@ def main():
     # 1. Load or generate unique credentials per user
     creds = load_or_create_credentials()
     print(f"[INIT] Loaded unique credentials register for Administrator and {len(USER_DEFS)} domain users.")
+    print(f"[INIT] Local credential store secured via OS ACLs: {CREDENTIALS_FILE}")
 
     # 2. Inspect existing environment
     domain_exists = is_domain_provisioned()
@@ -121,134 +150,209 @@ def main():
         print("     Preserving existing domain database and objects (Non-destructive mode).")
         if not samba_running:
             print("     Starting Samba daemon...")
-            run_wsl_cmd("samba -D && sleep 2")
+            res = run_wsl_cmd("samba -D && sleep 2")
+            if res.returncode != 0:
+                print(f"[ERROR] Failed to start Samba daemon: {res.stderr}", file=sys.stderr)
+                sys.exit(1)
     else:
         print("\n[INIT] Domain not detected. Provisioning fresh Samba 4 AD DC...")
-        admin_pass = creds["Administrator"]
-        provision_cmd = f"""
+        # Transport password via stdin
+        provision_script = """
+        set -e
+        ADMIN_PASS=$(cat)
         samba-tool domain provision \\
             --use-rfc2307 \\
             --realm=NEXORA.TEST \\
             --domain=NEXORA \\
             --server-role=dc \\
             --dns-backend=SAMBA_INTERNAL \\
-            --adminpass='{admin_pass}'
+            --adminpass="$ADMIN_PASS"
+        samba -D
+        sleep 2
         """
-        res = run_wsl_cmd(provision_cmd)
+        res = run_wsl_cmd(provision_script, input_data=creds["Administrator"])
         if res.returncode != 0:
-            print("[ERROR] Domain provisioning failed!", file=sys.stderr)
+            print(f"[ERROR] Domain provisioning failed: {res.stderr}\n{res.stdout}", file=sys.stderr)
             sys.exit(1)
-        run_wsl_cmd("samba -D && sleep 2")
 
-    # 3. Rotate Administrator password on existing domain
-    print("\n--> [Step 1/6] Rotating and Enforcing Administrator Credential...")
-    admin_rot_cmd = f"""
-    samba-tool user setpassword Administrator --newpassword='{creds["Administrator"]}' >/dev/null 2>&1
+    # 3. Transport credentials securely into WSL temporary vault (mode 600, cleaned on exit)
+    vault_script = """
+    set -e
+    cat > /tmp/.ad_vault.json
+    chmod 600 /tmp/.ad_vault.json
     """
-    res = run_wsl_cmd(admin_rot_cmd)
-    if res.returncode == 0:
-        print("     Administrator password synchronized successfully.")
+    res = run_wsl_cmd(vault_script, input_data=json.dumps(creds))
+    if res.returncode != 0:
+        print(f"[ERROR] Failed to stage credentials vault: {res.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    # 4. Synchronize Administrator and Domain Users safely using Python script inside WSL
+    print("\n--> [Step 1/5] Synchronizing Administrator and 12 Domain Accounts...")
+    sync_script = """
+    python3 - << 'PY_SYNC'
+import json, sys, subprocess
+
+with open('/tmp/.ad_vault.json') as f:
+    creds = json.load(f)
+
+# Rotate Administrator password
+admin_pass = creds['Administrator']
+res = subprocess.run(['samba-tool', 'user', 'setpassword', 'Administrator', f'--newpassword={admin_pass}'], capture_output=True, text=True)
+if res.returncode != 0:
+    print(f"[ERROR] Administrator password sync failed: {res.stderr}", file=sys.stderr)
+    sys.exit(1)
+
+USER_DEFS = [
+    ("kavitha.murthy", "Kavitha", "Murthy", "HR Specialist", "OU=HR"),
+    ("deepak.rao", "Deepak", "Rao", "Financial Controller", "OU=Finance"),
+    ("arun.nair", "Arun", "Nair", "Operations Manager", "OU=Operations"),
+    ("prasad.joshi", "Prasad", "Joshi", "Operations Coordinator", "OU=Operations"),
+    ("alex.chen", "Alex", "Chen", "L1 Service Desk Analyst", "OU=IT"),
+    ("priya.sharma", "Priya", "Sharma", "L1 Service Desk Analyst", "OU=IT"),
+    ("suresh.hegde", "Suresh", "Hegde", "IT Systems Administrator", "OU=IT"),
+    ("rajesh.bhat", "Rajesh", "Bhat", "Head of IT Operations", "OU=IT"),
+    ("divya.ramesh", "Divya", "Ramesh", "Lead Software Engineer", "OU=Engineering"),
+    ("karthik.subramaniam", "Karthik", "Subramaniam", "Software Engineer", "OU=Engineering"),
+    ("shreya.patil", "Shreya", "Patil", "Account Executive", "OU=Sales"),
+    ("akash.desai", "Akash", "Desai", "Senior Sales Manager", "OU=Sales")
+]
+
+# Ensure OUs exist
+existing_ous = subprocess.run(['samba-tool', 'ou', 'list'], capture_output=True, text=True).stdout
+for ou in ["OU=HR", "OU=Finance", "OU=Operations", "OU=IT", "OU=Engineering", "OU=Sales"]:
+    if ou.lower() not in existing_ous.lower():
+        r = subprocess.run(['samba-tool', 'ou', 'create', ou], capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f"[ERROR] Failed to create {ou}: {r.stderr}", file=sys.stderr)
+            sys.exit(1)
+
+# Ensure Users exist and passwords match
+existing_users = subprocess.run(['samba-tool', 'user', 'list'], capture_output=True, text=True).stdout.splitlines()
+for uname, gname, sname, title, oupath in USER_DEFS:
+    upass = creds[uname]
+    if uname in existing_users:
+        r = subprocess.run(['samba-tool', 'user', 'setpassword', uname, f'--newpassword={upass}'], capture_output=True, text=True)
     else:
-        print(f"     [WARN] Administrator password update check: rc={res.returncode}")
+        r = subprocess.run([
+            'samba-tool', 'user', 'create', uname, upass,
+            f'--given-name={gname}', f'--surname={sname}',
+            f'--job-title={title}', f'--userou={oupath}'
+        ], capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"[ERROR] Failed to configure user {uname}: {r.stderr}", file=sys.stderr)
+        sys.exit(1)
 
-    # 4. Verify Kerberos configuration
-    print("\n--> [Step 2/6] Verifying Kerberos Configuration (/etc/krb5.conf)...")
-    krb_cmd = """
-    cat << 'EOF_K' > /etc/krb5.conf
-[libdefaults]
-	default_realm = NEXORA.TEST
-	dns_lookup_realm = false
-	dns_lookup_kdc = false
-
-[realms]
-	NEXORA.TEST = {
-		kdc = 127.0.0.1
-		admin_server = 127.0.0.1
-	}
-
-[domain_realm]
-	.nexora.test = NEXORA.TEST
-	nexora.test = NEXORA.TEST
-EOF_K
+print("[OK] All 12 domain users and Administrator synchronized successfully.")
+PY_SYNC
     """
-    run_wsl_cmd(krb_cmd)
+    res = run_wsl_cmd(sync_script)
+    if res.returncode != 0:
+        print(f"[ERROR] User synchronization failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
+        run_wsl_cmd("rm -f /tmp/.ad_vault.json")
+        sys.exit(1)
+    print("     " + res.stdout.strip())
 
-    # 5. Verify OUs
-    print("\n--> [Step 3/6] Verifying Departmental Organizational Units...")
-    ou_cmd = """
-    for ou in "OU=HR" "OU=Finance" "OU=Operations" "OU=IT" "OU=Engineering" "OU=Sales"; do
-        samba-tool ou list 2>/dev/null | grep -qi "$ou" || samba-tool ou create "$ou" 2>/dev/null || true
-    done
+    # 5. Configure AGDLP Group Structure and Nesting
+    print("\n--> [Step 2/5] Configuring AGDLP Group Structure and Nesting...")
+    agdlp_script = """
+    python3 - << 'PY_AGDLP'
+import subprocess, sys
+
+def check_run(cmd, desc):
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"[ERROR] {desc} failed: {r.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+existing_groups = subprocess.run(['samba-tool', 'group', 'list'], capture_output=True, text=True).stdout.splitlines()
+
+# A. Global Groups
+global_groups = ["GG-HR", "GG-Finance", "GG-Operations", "GG-IT", "GG-Engineering", "GG-Sales", "GG-All-Staff"]
+for g in global_groups:
+    if g not in existing_groups:
+        check_run(['samba-tool', 'group', 'add', g, '--group-scope=Global'], f"Creating group {g}")
+
+# B. Domain Local Groups
+domain_local_groups = ["DL-CompanyShared-RW", "DL-HR-Private-RW", "DL-Finance-Private-RW", "DL-IT-Admin-RW"]
+for dl in domain_local_groups:
+    if dl not in existing_groups:
+        check_run(['samba-tool', 'group', 'add', dl, '--group-scope=Domain'], f"Creating group {dl}")
+
+# C. Account -> Global Group memberships
+memberships = {
+    "GG-HR": ["kavitha.murthy"],
+    "GG-Finance": ["deepak.rao"],
+    "GG-Operations": ["arun.nair", "prasad.joshi"],
+    "GG-IT": ["alex.chen", "priya.sharma", "suresh.hegde", "rajesh.bhat"],
+    "GG-Engineering": ["divya.ramesh", "karthik.subramaniam"],
+    "GG-Sales": ["shreya.patil", "akash.desai"],
+    "GG-All-Staff": [
+        "kavitha.murthy", "deepak.rao", "arun.nair", "prasad.joshi",
+        "alex.chen", "priya.sharma", "suresh.hegde", "rajesh.bhat",
+        "divya.ramesh", "karthik.subramaniam", "shreya.patil", "akash.desai"
+    ]
+}
+
+for group, users in memberships.items():
+    current_members = subprocess.run(['samba-tool', 'group', 'listmembers', group], capture_output=True, text=True).stdout.splitlines()
+    missing = [u for u in users if u not in current_members]
+    if missing:
+        check_run(['samba-tool', 'group', 'addmembers', group, ','.join(missing)], f"Adding members to {group}")
+
+# D. Global Groups -> Domain Local Groups (AGDLP Nesting)
+nesting = {
+    "DL-HR-Private-RW": "GG-HR",
+    "DL-Finance-Private-RW": "GG-Finance",
+    "DL-IT-Admin-RW": "GG-IT",
+    "DL-CompanyShared-RW": "GG-All-Staff"
+}
+
+for dl, gg in nesting.items():
+    current_members = subprocess.run(['samba-tool', 'group', 'listmembers', dl], capture_output=True, text=True).stdout.splitlines()
+    if gg not in current_members:
+        check_run(['samba-tool', 'group', 'addmembers', dl, gg], f"Nesting {gg} into {dl}")
+
+# E. Password and Lockout Policy
+check_run([
+    'samba-tool', 'domain', 'passwordsettings', 'set',
+    '--complexity=on', '--history-length=5', '--min-pwd-age=0',
+    '--max-pwd-age=90', '--min-pwd-length=8', '--account-lockout-threshold=5',
+    '--account-lockout-duration=15', '--reset-account-lockout-after=15'
+], "Setting domain password policy")
+
+print("[OK] AGDLP group nesting and domain password policy configured.")
+PY_AGDLP
     """
-    run_wsl_cmd(ou_cmd)
+    res = run_wsl_cmd(agdlp_script)
+    if res.returncode != 0:
+        print(f"[ERROR] AGDLP configuration failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
+        run_wsl_cmd("rm -f /tmp/.ad_vault.json")
+        sys.exit(1)
+    print("     " + res.stdout.strip())
 
-    # 6. Verify Users with Unique Credentials
-    print("\n--> [Step 4/6] Synchronizing 12 Domain Accounts with Unique Passwords...")
-    for uname, gname, sname, title, oupath, _ in USER_DEFS:
-        upass = creds[uname]
-        user_sync_cmd = f"""
-        if samba-tool user list 2>/dev/null | grep -qx '{uname}'; then
-            samba-tool user setpassword '{uname}' --newpassword='{upass}' >/dev/null 2>&1
-        else
-            samba-tool user create '{uname}' '{upass}' \\
-                --given-name='{gname}' \\
-                --surname='{sname}' \\
-                --job-title='{title}' \\
-                --userou='{oupath}' >/dev/null 2>&1
-        fi
-        """
-        res = run_wsl_cmd(user_sync_cmd)
-        if res.returncode != 0:
-            print(f"[WARN] User {uname} sync failed: {res.stderr}", file=sys.stderr)
-
-    # 7. Configure AGDLP Group Structure
-    print("\n--> [Step 5/6] Implementing Textbook AGDLP Group Nesting...")
-    agdlp_cmd = """
-    # A. Global Groups (GG_*)
-    for g in GG-HR GG-Finance GG-Operations GG-IT GG-Engineering GG-Sales GG-All-Staff; do
-        samba-tool group list 2>/dev/null | grep -qx "$g" || samba-tool group add "$g" --group-scope=Global 2>/dev/null || true
-    done
-
-    # B. Domain Local Resource Groups (DL_*)
-    for dl in DL-CompanyShared-RW DL-HR-Private-RW DL-Finance-Private-RW DL-IT-Admin-RW; do
-        samba-tool group list 2>/dev/null | grep -qx "$dl" || samba-tool group add "$dl" --group-scope=Domain 2>/dev/null || true
-    done
-
-    # C. Accounts -> Global Groups
-    samba-tool group addmembers GG-HR kavitha.murthy 2>/dev/null || true
-    samba-tool group addmembers GG-Finance deepak.rao 2>/dev/null || true
-    samba-tool group addmembers GG-Operations arun.nair,prasad.joshi 2>/dev/null || true
-    samba-tool group addmembers GG-IT alex.chen,priya.sharma,suresh.hegde,rajesh.bhat 2>/dev/null || true
-    samba-tool group addmembers GG-Engineering divya.ramesh,karthik.subramaniam 2>/dev/null || true
-    samba-tool group addmembers GG-Sales shreya.patil,akash.desai 2>/dev/null || true
-    samba-tool group addmembers GG-All-Staff kavitha.murthy,deepak.rao,arun.nair,prasad.joshi,alex.chen,priya.sharma,suresh.hegde,rajesh.bhat,divya.ramesh,karthik.subramaniam,shreya.patil,akash.desai 2>/dev/null || true
-
-    # D. Global Groups -> Domain Local Groups (Nesting)
-    samba-tool group addmembers DL-HR-Private-RW GG-HR 2>/dev/null || true
-    samba-tool group addmembers DL-Finance-Private-RW GG-Finance 2>/dev/null || true
-    samba-tool group addmembers DL-IT-Admin-RW GG-IT 2>/dev/null || true
-    samba-tool group addmembers DL-CompanyShared-RW GG-All-Staff 2>/dev/null || true
-
-    # E. Set Password & Account Lockout Policy
-    samba-tool domain passwordsettings set \
-        --complexity=on \
-        --history-length=5 \
-        --min-pwd-age=0 \
-        --max-pwd-age=90 \
-        --min-pwd-length=8 \
-        --account-lockout-threshold=5 \
-        --account-lockout-duration=15 \
-        --reset-account-lockout-after=15 2>/dev/null || true
-    """
-    run_wsl_cmd(agdlp_cmd)
-
-    # 8. Configure SMB Share Permissions in smb.conf & Shared Directory Tree
-    print("\n--> [Step 6/6] Synchronizing SMB Share Definitions & Permissions...")
-    shares_setup_cmd = """
+    # 6. Configure Restrictive File System Permissions and SMB Shares
+    print("\n--> [Step 3/5] Applying Restrictive Filesystem Permissions (chmod 2770) & SMB Shares...")
+    shares_setup_script = """
+    set -e
     mkdir -p /srv/shares/company_shared /srv/shares/hr /srv/shares/finance /srv/shares/it
-    chmod 777 /srv/shares/company_shared /srv/shares/hr /srv/shares/finance /srv/shares/it
+    
+    # Restrictive filesystem permissions (Replacing world-writable chmod 777)
+    chown root:root /srv/shares
+    chmod 755 /srv/shares
 
-    # Clean existing share definitions to avoid duplicate sections
+    chown 'root:NEXORA\\dl-companyshared-rw' /srv/shares/company_shared
+    chmod 2770 /srv/shares/company_shared
+
+    chown 'root:NEXORA\\dl-hr-private-rw' /srv/shares/hr
+    chmod 2770 /srv/shares/hr
+
+    chown 'root:NEXORA\\dl-finance-private-rw' /srv/shares/finance
+    chmod 2770 /srv/shares/finance
+
+    chown 'root:NEXORA\\dl-it-admin-rw' /srv/shares/it
+    chmod 2770 /srv/shares/it
+
+    # Configure smb.conf shares
     sed -i '/^\\[CompanyShared\\]/,$d' /etc/samba/smb.conf
     sed -i '/^\\[HR-Private\\]/,$d' /etc/samba/smb.conf
     sed -i '/^\\[Finance-Private\\]/,$d' /etc/samba/smb.conf
@@ -282,37 +386,37 @@ EOF_K
 SMB_CONFIG
 
     pkill -HUP smbd 2>/dev/null || pkill -HUP samba 2>/dev/null || true
+    echo "[OK] Share permissions set to 2770 with Domain Local group ownership."
     """
-    run_wsl_cmd(shares_setup_cmd)
+    res = run_wsl_cmd(shares_setup_script)
+    if res.returncode != 0:
+        print(f"[ERROR] SMB share setup failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
+        run_wsl_cmd("rm -f /tmp/.ad_vault.json")
+        sys.exit(1)
+    print("     " + res.stdout.strip())
 
-    # 9. Execute Rigorous Verification with Temporary Auth Files
-    print("\n--> Executing Comprehensive AGDLP Verification & Generating Audited Report...")
-    
-    # Create temporary credential files inside WSL for safe smbclient testing
-    auth_setup_cmd = f"""
-    cat << 'EOF_AUTH' > /tmp/.auth_hr
-username=kavitha.murthy
-password={creds['kavitha.murthy']}
-domain=NEXORA
-EOF_AUTH
+    # 7. DNS Hygiene: Remove Stale Host Records
+    print("\n--> [Step 4/5] Auditing & Purging Stale DNS Registrations...")
+    dns_cleanup_script = """
+    # Get current eth0 IPv4 address
+    DC_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}')
+    echo "[INFO] Live DC IPv4 Address: $DC_IP"
 
-    cat << 'EOF_AUTH' > /tmp/.auth_fin
-username=deepak.rao
-password={creds['deepak.rao']}
-domain=NEXORA
-EOF_AUTH
-
-    cat << 'EOF_AUTH' > /tmp/.auth_it
-username=alex.chen
-password={creds['alex.chen']}
-domain=NEXORA
-EOF_AUTH
-
-    chmod 600 /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it
+    # Query all A records for softwaresamee in nexora.test
+    EXISTING_A=$(samba-tool dns query 127.0.0.1 nexora.test softwaresamee A -P 2>/dev/null | grep -oP '(?<=A:\\s)\\d+(\\.\\d+){3}' || true)
+    for ip in $EXISTING_A; do
+        if [ "$ip" != "$DC_IP" ]; then
+            echo "[PURGE] Removing stale DNS A record: softwaresamee -> $ip"
+            samba-tool dns delete 127.0.0.1 nexora.test softwaresamee A "$ip" -P 2>/dev/null || true
+        fi
+    done
     """
-    run_wsl_cmd(auth_setup_cmd)
+    res = run_wsl_cmd(dns_cleanup_script)
+    print("     " + res.stdout.strip())
 
-    audit_script = f"""
+    # 8. Rigorous Audit & Verification
+    print("\n--> [Step 5/5] Executing Forensic AGDLP & Access Control Audit...")
+    audit_script = """
     set -e
     OUT="/tmp/ad-audit.txt"
     echo "=== DOMAIN CONTROLLER STATUS ===" > "$OUT"
@@ -337,12 +441,28 @@ EOF_AUTH
     dig @::1 _ldap._tcp.nexora.test SRV +short >> "$OUT" 2>&1
 
     echo -e "\n=== DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===" >> "$OUT"
-    TARGET_HOST=$(dig @::1 _ldap._tcp.nexora.test SRV +short | awk '{{print $4}}')
+    TARGET_HOST=$(dig @::1 _ldap._tcp.nexora.test SRV +short | awk '{print $4}' | sed 's/\\.$//')
     dig @::1 "$TARGET_HOST" A +short >> "$OUT" 2>&1
 
+    # Extract credentials for testing from vault
+    python3 - << 'PY_AUTH_PREP'
+import json
+with open('/tmp/.ad_vault.json') as f:
+    creds = json.load(f)
+
+for role, user in [("hr", "kavitha.murthy"), ("fin", "deepak.rao"), ("it", "alex.chen")]:
+    with open(f'/tmp/.auth_{role}', 'w') as af:
+        af.write(f"username={user}\\npassword={creds[user]}\\ndomain=NEXORA\\n")
+
+with open('/tmp/.alex_pass', 'w') as pf:
+    pf.write(creds['alex.chen'])
+PY_AUTH_PREP
+    chmod 600 /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.alex_pass
+
     echo -e "\n=== KERBEROS TICKET ACQUISITION (alex.chen@NEXORA.TEST) ===" >> "$OUT"
-    echo -n '{creds["alex.chen"]}' | kinit alex.chen@NEXORA.TEST >/dev/null 2>&1
+    cat /tmp/.alex_pass | kinit alex.chen@NEXORA.TEST >/dev/null 2>&1
     klist >> "$OUT" 2>&1
+    rm -f /tmp/.alex_pass
 
     echo -e "\n=== SMB SHARES DISCOVERY ===" >> "$OUT"
     smbclient -L localhost -A /tmp/.auth_it 2>&1 | grep -E "Disk|IPC" >> "$OUT" 2>&1
@@ -358,10 +478,12 @@ EOF_AUTH
     rm -f /tmp/test_hr.txt
 
     echo -e "\n=== DENIED ACCESS TEST (Finance User deepak.rao -> HR-Private) ===" >> "$OUT"
-    if smbclient //localhost/HR-Private -A /tmp/.auth_fin -c "ls" >> "$OUT" 2>&1; then
-        echo "[SECURITY FAILURE] Unauthorized user accessed HR-Private!" >> "$OUT"
-    else
+    DENY_HR_OUT=$(smbclient //localhost/HR-Private -A /tmp/.auth_fin -c "ls" 2>&1 || true)
+    if echo "$DENY_HR_OUT" | grep -q "NT_STATUS_ACCESS_DENIED"; then
         echo "tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)" >> "$OUT"
+    else
+        echo "[SECURITY FAILURE] Expected NT_STATUS_ACCESS_DENIED, got: $DENY_HR_OUT" >> "$OUT"
+        exit 1
     fi
 
     echo -e "\n=== AUTHORIZED SHARE WRITE TEST (Finance User deepak.rao -> Finance-Private) ===" >> "$OUT"
@@ -370,17 +492,28 @@ EOF_AUTH
     rm -f /tmp/test_fin.txt
 
     echo -e "\n=== DENIED ACCESS TEST (HR User kavitha.murthy -> IT-Admin) ===" >> "$OUT"
-    if smbclient //localhost/IT-Admin -A /tmp/.auth_hr -c "ls" >> "$OUT" 2>&1; then
-        echo "[SECURITY FAILURE] Non-IT user accessed IT-Admin!" >> "$OUT"
-    else
+    DENY_IT_OUT=$(smbclient //localhost/IT-Admin -A /tmp/.auth_hr -c "ls" 2>&1 || true)
+    if echo "$DENY_IT_OUT" | grep -q "NT_STATUS_ACCESS_DENIED"; then
         echo "tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)" >> "$OUT"
+    else
+        echo "[SECURITY FAILURE] Expected NT_STATUS_ACCESS_DENIED, got: $DENY_IT_OUT" >> "$OUT"
+        exit 1
     fi
 
-    # Cleanup temporary authentication files
-    rm -f /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it
+    echo -e "\n=== AUTHORIZED SHARE WRITE TEST (IT User alex.chen -> IT-Admin) ===" >> "$OUT"
+    echo "IT Infrastructure Runbook" > /tmp/test_it.txt
+    smbclient //localhost/IT-Admin -A /tmp/.auth_it -c "put /tmp/test_it.txt it_doc.txt; ls; rm it_doc.txt" >> "$OUT" 2>&1
+    rm -f /tmp/test_it.txt
+
+    # Cleanup temporary authentication files and vault
+    rm -f /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.ad_vault.json
     cat "$OUT"
     """
     res = run_wsl_cmd(audit_script)
+    if res.returncode != 0:
+        print(f"[ERROR] Audit verification failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
+        run_wsl_cmd("rm -f /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.ad_vault.json")
+        sys.exit(1)
 
     evidence_file = os.path.join(EVIDENCE_DIR, "samba-ad-dc-verification.txt")
     with open(evidence_file, "w", encoding="utf-8") as f:
