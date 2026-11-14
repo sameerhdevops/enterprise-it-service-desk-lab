@@ -58,13 +58,18 @@ divya.ramesh
 === DNS SRV RECORD RESOLUTION (_ldap._tcp.nexora.test) ===
 0 100 389 softwaresamee.nexora.test.
 
+=== DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===
+172.17.0.1
+172.24.160.96
+10.255.255.254
+
 === KERBEROS TICKET ACQUISITION (alex.chen@NEXORA.TEST) ===
 Ticket cache: FILE:/tmp/krb5cc_0
 Default principal: alex.chen@NEXORA.TEST
 
 Valid starting     Expires            Service principal
-11/14/26 04:04:57  11/14/26 14:04:57  krbtgt/NEXORA.TEST@NEXORA.TEST
-	renew until 11/15/26 04:04:57
+11/14/26 05:00:53  11/14/26 15:00:53  krbtgt/NEXORA.TEST@NEXORA.TEST
+	renew until 11/15/26 05:00:53
 
 === SMB SHARES DISCOVERY ===
 	sysvol          Disk      
@@ -75,11 +80,34 @@ Valid starting     Expires            Service principal
 	IT-Admin        Disk      
 	IPC$            IPC       IPC Service (Samba 4.19.5-Ubuntu)
 
-=== AUTHORIZED SHARE ACCESS TEST (alex.chen -> CompanyShared) ===
-  .                                   D        0  Fri Nov 13 12:50:52 2026
-  ..                                  D        0  Fri Nov 13 12:50:52 2026
+=== AUTHORIZED SHARE WRITE TEST (alex.chen -> CompanyShared) ===
+putting file /tmp/test_shared.txt as \test_policy.txt (4.2 kb/s) (average 4.2 kb/s)
+  .                                   D        0  Sat Nov 14 05:00:54 2026
+  ..                                  D        0  Sat Nov 14 05:00:54 2026
+  test_policy.txt                     A       39  Sat Nov 14 05:00:54 2026
 
-		1055762868 blocks of size 1024. 993955260 blocks available
+		1055762868 blocks of size 1024. 993914644 blocks available
+
+=== AUTHORIZED SHARE WRITE TEST (HR User kavitha.murthy -> HR-Private) ===
+putting file /tmp/test_hr.txt as \hr_doc.txt (5.9 kb/s) (average 5.9 kb/s)
+  .                                   D        0  Sat Nov 14 05:00:54 2026
+  ..                                  D        0  Sat Nov 14 05:00:54 2026
+  hr_doc.txt                          A       24  Sat Nov 14 05:00:54 2026
+
+		1055762868 blocks of size 1024. 993914644 blocks available
 
 === DENIED ACCESS TEST (Finance User deepak.rao -> HR-Private) ===
 tree connect failed: NT_STATUS_ACCESS_DENIED
+tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)
+
+=== AUTHORIZED SHARE WRITE TEST (Finance User deepak.rao -> Finance-Private) ===
+putting file /tmp/test_fin.txt as \fin_report.txt (7.6 kb/s) (average 7.6 kb/s)
+  .                                   D        0  Sat Nov 14 05:00:54 2026
+  ..                                  D        0  Sat Nov 14 05:00:54 2026
+  fin_report.txt                      A       31  Sat Nov 14 05:00:54 2026
+
+		1055762868 blocks of size 1024. 993914644 blocks available
+
+=== DENIED ACCESS TEST (HR User kavitha.murthy -> IT-Admin) ===
+tree connect failed: NT_STATUS_ACCESS_DENIED
+tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)

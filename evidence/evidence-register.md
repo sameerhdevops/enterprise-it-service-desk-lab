@@ -3,7 +3,7 @@
 **Project:** Enterprise IT Service Desk & End-User Support Operations Lab  
 **Organization:** Nexora Technologies (Simulated Lab)  
 **Location:** `D:\Projects\enterprise-it-service-desk-lab\evidence`  
-**Last Verified:** 2026-11-12 (Forensic Audit & Correction)  
+**Last Verified:** 2026-11-14 (Final Remediation & Verification)  
 
 ---
 
@@ -34,12 +34,12 @@ In accordance with strict engineering ethics and interview defensibility standar
 | `test-netconnection-dns-port.txt` | `command-output/` | Redacted Host Output | Networking | Layer 4 TCP port 53 probe using PowerShell `Test-NetConnection`. | Redacted Host Output | **VERIFIED (Redacted)** |
 | `nexora-topology.txt` | `network-diagrams/` | Simulated Technical Example | Networking | ASCII topology layout, VLAN 10/20 subnet plan, and port mapping for Cisco Packet Tracer. | Simulated Technical Spec | **VERIFIED (Lab Spec)** |
 | `test-results-log.txt` | `validation/` | Automated Test Output | Reporting & QA | Execution log of 13 unit tests and 5 CSV dataset integrity validations (0 errors). | Automated Test Execution | **VERIFIED (100% Pass)** |
-| `samba-ad-dc-verification.txt` | `active-directory/` | Genuine Domain Output | Active Directory / Identity | Live Samba 4 AD DC deployment: Forest functional level 2008 R2, password policy, 12 users, textbook AGDLP group nesting (`GG-*` -> `DL-*`), Kerberos ticket `kinit`/`klist`, SMB share access. | Direct Linux/WSL2 Samba AD Capture | **VERIFIED (Live)** |
-| `nexora-lab-traffic.pcap` | `packet-captures/` | Genuine Packet Capture | Networking / Packet Analysis | Native 16.5 KB `.pcap` capture of isolated loopback ICMP, DNS SRV query, DNS NXDOMAIN, and TCP 3-way handshake traffic. | Direct tcpdump Capture | **VERIFIED (Live)** |
-| `packet-analysis-report.md` | `packet-captures/` | Forensic Analysis Report | Networking / Wireshark | In-depth frame-by-frame analysis report with 8 display filters verified via `tshark 4.2.2` and packet flow diagrams. | Forensic TShark Inspection | **VERIFIED (Live)** |
+| `samba-ad-dc-verification.txt` | `active-directory/` | Genuine Domain Output | Active Directory / Identity | Live Samba 4 AD DC deployment: Forest functional level 2008 R2, password policy, 12 users with unique generated credentials, textbook AGDLP group nesting (`GG-*` -> `DL-*`), Kerberos ticket `kinit`/`klist`, SMB share access control verification (`kavitha.murthy` HR write / deepak denied, `deepak.rao` Finance write / HR denied, `alex.chen` CompanyShared write). | Direct Linux/WSL2 Samba AD Capture | **VERIFIED (Live)** |
+| `nexora-lab-traffic.pcap` | `packet-captures/` | Genuine Packet Capture | Networking / Packet Analysis | Native 3,776-byte `.pcap` capture (20 frames) of isolated loopback ICMP, DNS SRV query, DNS NXDOMAIN, and TCP 3-way handshake traffic. | Direct tcpdump Capture | **VERIFIED (Live)** |
+| `packet-analysis-report.md` | `packet-captures/` | Forensic Analysis Report | Networking / Wireshark | In-depth frame-by-frame analysis report with 8 display filters verified via `tshark 4.2.2`, packet flow diagrams, and dynamic frame queries. | Forensic TShark Inspection | **VERIFIED (Live)** |
 | `live-service-desk-export.json` | `itsm/` | Operational Platform Export | ITSM / Service Desk | JSON export of 17 active tickets with calculated SLA metadata from the live operational web Service Desk engine (`itsm/portal/app.py`). | Live Platform Database Export | **VERIFIED (Live)** |
-| `service-desk-test-evidence.txt` | `itsm/` | Automated Test Output | ITSM / Service Desk | Automated functional HTTP test log verifying 13 test modules: input validation, PBKDF2 auth, state machine transitions, XSS defense, 10 queues. | Automated Test Execution | **VERIFIED (100% Pass)** |
-| `m365-client-diagnostics-output.txt` | `microsoft-365/` | Genuine Host Output | Microsoft 365 & Cloud Identity | Live PowerShell diagnostic scan of Click-to-Run v16.0.19127, Teams LocalCache path, OneDrive PID 3760, and measured TCP 443 connect latencies. | Direct Windows 11 Host Capture | **VERIFIED (Live)** |
+| `service-desk-test-evidence.txt` | `itsm/` | Automated Test Output | ITSM / Service Desk | Automated functional HTTP test log verifying 15 test modules: input validation, PBKDF2 auth, state machine transitions, XSS defense, customer token access, CSRF/origin checks, 10 queues. | Automated Test Execution | **VERIFIED (100% Pass)** |
+| `m365-client-diagnostics-output.txt` | `microsoft-365/` | Genuine Host Output | Microsoft 365 & Cloud Identity | Live PowerShell diagnostic scan of Click-to-Run v16.0.19127, Teams LocalCache path, OneDrive process status, and measured TCP 443 connect latencies via direct TcpClient.Connect. | Direct Windows 11 Host Capture | **VERIFIED (Live)** |
 | `it-service-desk-architecture.svg` | `illustrative/` | Generated Illustrative Diagram | Architecture | Multi-tiered support model: Intake channels -> ITSM -> L1 Support -> Escalation paths. | Generated Vector SVG | **VERIFIED (Illustrative)** |
 | `incident-lifecycle-flow.svg` | `illustrative/` | Generated Illustrative Diagram | ITIL / ITSM | State transition machine: New -> In Progress -> On Hold -> Resolved -> Closed with pause rules. | Generated Vector SVG | **VERIFIED (Illustrative)** |
 | `ticket-escalation-workflow.svg` | `illustrative/` | Generated Illustrative Diagram | ITIL / Operations | Functional escalation (L1 -> L2 Desktop / Network -> L3) and hierarchical management triggers. | Generated Vector SVG | **VERIFIED (Illustrative)** |
@@ -54,5 +54,6 @@ In accordance with strict engineering ethics and interview defensibility standar
 ## 3. Defensibility Summary
 - **Zero Fabricated Screenshots:** No synthetic mockups or vendor interfaces are presented as genuine application screenshots.
 - **Explicit Redaction:** Host privacy is protected using standard placeholders (`[REDACTED_HOST]`, `[REDACTED_IP]`) while maintaining exact real command structures.
+- **Credential Hygiene & Historical Transparency:** Historical Git commits contain invalidated test credentials that have been rotated. Live environments utilize securely generated, unique credentials stored in git-ignored configuration files (`.ad_credentials.json`, `.local_credentials.json`).
 - **Clear Demarcation:** Illustrative diagrams reside strictly in `evidence/illustrative/` and carry prominent top-banner watermarks.
-- **Reproducible Testing:** Automated unit tests and data validation scripts execute directly via the Python standard library with zero external dependencies.
+- **Reproducible Testing:** Automated unit tests (13 tests) and Service Desk functional tests (15 tests) execute directly via the Python standard library with zero external dependencies.

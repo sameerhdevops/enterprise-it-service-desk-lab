@@ -5,9 +5,15 @@
 version 15.0
 service timestamps debug datetime msec
 service timestamps log datetime msec
-service password-encryption
 !
 hostname SW-CORE-01
+!
+! User Access Security
+! Security Note: Cisco Type 7 passwords ('service password-encryption') use a trivially
+! reversible XOR/Vigenère cipher and are not cryptographically secure.
+! Use Cisco Type 8 (PBKDF2-SHA256) or Type 9 (scrypt) secrets in operational environments.
+username admin privilege 15 secret <LOCAL_ADMIN_SECRET>
+enable secret <LOCAL_ENABLE_SECRET>
 !
 ! VLAN Database
 vlan 10
@@ -61,11 +67,9 @@ interface range FastEthernet0/19 - 24
  spanning-tree portfast
 !
 line con 0
- password 7 0822455D0A16
- login
+ login local
 line vty 0 4
- password 7 0822455D0A16
- login
+ login local
  transport input ssh
 !
 end

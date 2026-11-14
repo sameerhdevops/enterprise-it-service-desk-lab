@@ -17,7 +17,7 @@
 - **Engineered an interactive IT Service Desk platform** supporting 10 customer request types, ITIL v4 incident lifecycle transitions (`New` $\rightarrow$ `Assigned` $\rightarrow$ `In Progress` $\rightarrow$ `Resolved` $\rightarrow$ `Closed`), dynamic Impact $\times$ Urgency priority matrix, and elapsed-clock-hour SLA timers.
 - **Captured and analyzed live network traffic** (`.pcap`) using `tcpdump` and Wireshark; validated TCP 3-way handshakes (`SYN`, `SYN-ACK`, `ACK`), DNS SRV lookups, DNS error codes (`NXDOMAIN` / `rcode != 0`), and ICMP routing flows.
 - **Authored 15 technical Windows troubleshooting runbooks** covering Fast Startup kernel persistence, printer spooler stall recovery, high CPU process wait chain analysis, and Microsoft 365 client diagnostics (Teams cache, Outlook OST).
-- **Automated Service Desk MIS reporting** using Python standard library; built a 13-test automated unit test suite verifying duration reconciliation, dataset schema integrity, MTTR (15.75h), and SLA compliance (85.0%).
+- **Automated Service Desk MIS reporting** using Python standard library; built a 13-test automated unit test suite verifying duration reconciliation, dataset schema integrity, MTTR (15.75h), and sample SLA compliance (85.0%). Built 15 automated functional HTTP tests for the Service Desk web application.
 
 ---
 
@@ -25,7 +25,7 @@
 
 **Project Title:** Enterprise IT Service Desk & End-User Support Operations Lab  
 **Client/Company:** Personal Technical Portfolio (Simulated Enterprise: Nexora Technologies)  
-**Role:** L1 IT Support & Infrastructure Engineer  
+**Role:** Project Creator / IT Support Lab Administrator  
 **Employment Type:** Self-Directed Practical Project  
 **Team Size:** 1 (Sole Author & Implementer)  
 
@@ -61,7 +61,7 @@ A practical, verifiable IT operations portfolio built to demonstrate day-to-day 
 - **Operational Web Service Desk Engine:** Interactive web portal (`itsm/portal/app.py`) featuring 10 customer-facing request types, dynamic Impact x Urgency priority calculations, and agent queue management.
 - **Forensic Packet Captures:** Live `.pcap` capture file in `evidence/packet-captures/` with verified Wireshark filters for TCP handshakes, DNS SRV resolution, and ICMP diagnostics.
 - **Windows 11 Troubleshooting Runbooks:** 15 standardized runbooks detailing command inputs, expected outputs, and root-cause explanations tested on the Windows 11 host.
-- **Automated Validation:** 13 unit tests (`reporting/tests/test_validation.py`) and dataset validator (`scripts/validate-data.py`) running with zero external dependencies.
+- **Automated Validation:** 13 unit tests (`reporting/tests/test_validation.py`), 15 platform integration tests (`scripts/test_service_desk_platform.py`), and dataset validator (`scripts/validate-data.py`) running with zero external dependencies.
 ```
 
 ---
@@ -82,4 +82,4 @@ A practical, verifiable IT operations portfolio built to demonstrate day-to-day 
 > 
 > *Fourth, on Windows support, I wrote 15 modular runbooks covering issues like Windows Fast Startup. I verified that Fast Startup hibernates the OS kernel session and loaded drivers to `hiberfil.sys`, which is why high uptime accumulates across normal shutdowns and why a cold reboot (`shutdown /r /t 0`) is necessary to clear persistent driver issues.*
 > 
-> *Finally, I automated reporting using Python's standard library, generating daily summaries and SLA compliance reports, backed by a 13-test automated unit test suite. Every command and script is stored in my GitHub repository, fully documented and tested."*
+> *Finally, I automated reporting using Python's standard library, generating daily summaries and SLA compliance reports, backed by a 13-test automated unit test suite and 15 automated Service Desk platform tests. Every command and script is stored in my GitHub repository, fully documented and tested."*

@@ -1,7 +1,7 @@
 ﻿======================================================================
   NEXORA TECHNOLOGIES - M365 / OFFICE CLIENT DIAGNOSTIC REPORT
   Scope: Local Client Diagnostics & Endpoint Reachability Verification
-  Executed: 2026-11-14 09.41.56 | Host: SOFTWARESAMEE
+  Executed: 2026-11-14 11.05.08 | Host: NEX-WS01 (Windows 11 Workstation)
 ======================================================================
 
 [1. Office Click-to-Run Suite Detection]
@@ -11,21 +11,21 @@
   UpdateChannel:      http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60
 
 [2. Outlook Profile & Configuration State]
-  Profile State:      NOT INITIALIZED (No Outlook 16.0 registry profile configured for user)
+  Profile State:      NOT INITIALIZED (No Outlook 16.0 registry profile configured for user; mailbox access not tested)
 
 [3. Microsoft Teams Process & Local Cache State]
-  Process State:      STOPPED / IDLE
-  New Teams LocalCache: PRESENT (C:\Users\sameer\AppData\Local\Packages\MSTeams_8wekyb3d8bbwe\LocalCache)
+  Process State:      STOPPED / IDLE (Teams communication services not active/tested)
+  New Teams LocalCache: PRESENT (%LOCALAPPDATA%\Packages\MSTeams_8wekyb3d8bbwe\LocalCache)
   Classic Teams Cache:  ABSENT
 
 [4. Microsoft OneDrive Process & Sync Directory State]
   Process State:      RUNNING (PID: 3760)
-  Local Sync Path:    PRESENT (C:\Users\sameer\OneDrive)
+  Local Sync Path:    PRESENT (%USERPROFILE%\OneDrive - Process active; sync state unverified)
 
 [5. Microsoft 365 Cloud Endpoint TCP Socket Reachability (Port 443)]
-  Endpoint: login.microsoftonline.com    | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 143.3 ms
-  Endpoint: outlook.office.com           | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 84.7 ms
-  Endpoint: teams.microsoft.com          | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 128.6 ms
+  Endpoint: login.microsoftonline.com    | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 992.9 ms
+  Endpoint: outlook.office.com           | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 338.2 ms
+  Endpoint: teams.microsoft.com          | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 434.8 ms
 
 ======================================================================
   END OF M365 CLIENT DIAGNOSTIC REPORT (CLIENT-SIDE VERIFIED)

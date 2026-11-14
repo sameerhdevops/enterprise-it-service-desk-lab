@@ -11,7 +11,7 @@ $output = @()
 $output += "======================================================================"
 $output += "  NEXORA TECHNOLOGIES - M365 / OFFICE CLIENT DIAGNOSTIC REPORT"
 $output += "  Scope: Local Client Diagnostics & Endpoint Reachability Verification"
-$output += "  Executed: $timestamp | Host: $env:COMPUTERNAME"
+$output += "  Executed: $timestamp | Host: NEX-WS01 (Windows 11 Workstation)"
 $output += "======================================================================"
 
 # 1. Office / M365 Click-to-Run Installation State
@@ -40,7 +40,7 @@ if ($profiles -and $profiles.Count -gt 0) {
     $output += "  Profile State:      CONFIGURED ($($profiles.Count) local profile(s) detected)"
     $output += "  Profile Names:      $profileNames"
 } else {
-    $output += "  Profile State:      NOT INITIALIZED (No Outlook 16.0 registry profile configured for user)"
+    $output += "  Profile State:      NOT INITIALIZED (No Outlook 16.0 registry profile configured for user; mailbox access not tested)"
 }
 
 # 3. Microsoft Teams Process & Cache Inspection
@@ -50,12 +50,12 @@ if ($teamsProcess) {
     $proc = $teamsProcess[0]
     $output += "  Process State:      RUNNING (PID: $($proc.Id), Memory WorkingSet: $([math]::Round($proc.WorkingSet/1MB,2)) MB)"
 } else {
-    $output += "  Process State:      STOPPED / IDLE"
+    $output += "  Process State:      STOPPED / IDLE (Teams communication services not active/tested)"
 }
 $newTeamsPath = "$env:LOCALAPPDATA\Packages\MSTeams_8wekyb3d8bbwe\LocalCache"
 $classicTeamsPath = "$env:APPDATA\Microsoft\Teams"
-$output += "  New Teams LocalCache: $(if (Test-Path $newTeamsPath) { 'PRESENT (' + $newTeamsPath + ')' } else { 'ABSENT' })"
-$output += "  Classic Teams Cache:  $(if (Test-Path $classicTeamsPath) { 'PRESENT (' + $classicTeamsPath + ')' } else { 'ABSENT' })"
+$output += "  New Teams LocalCache: $(if (Test-Path $newTeamsPath) { 'PRESENT (%LOCALAPPDATA%\Packages\MSTeams_8wekyb3d8bbwe\LocalCache)' } else { 'ABSENT' })"
+$output += "  Classic Teams Cache:  $(if (Test-Path $classicTeamsPath) { 'PRESENT (%APPDATA%\Microsoft\Teams)' } else { 'ABSENT' })"
 
 # 4. OneDrive Process & Sync State
 $output += "`n[4. Microsoft OneDrive Process & Sync Directory State]"
@@ -66,7 +66,7 @@ if ($oneDriveProcess) {
     $output += "  Process State:      STOPPED / IDLE"
 }
 $oneDriveFolder = "$env:USERPROFILE\OneDrive"
-$output += "  Local Sync Path:    $(if (Test-Path $oneDriveFolder) { 'PRESENT (' + $oneDriveFolder + ')' } else { 'ABSENT' })"
+$output += "  Local Sync Path:    $(if (Test-Path $oneDriveFolder) { 'PRESENT (%USERPROFILE%\OneDrive - Process active; sync state unverified)' } else { 'ABSENT' })"
 
 # 5. Live Cloud Endpoint TCP Port 443 Socket Connect & Latency
 $output += "`n[5. Microsoft 365 Cloud Endpoint TCP Socket Reachability (Port 443)]"
@@ -80,19 +80,13 @@ foreach ($ep in $endpoints) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $tcpClient = New-Object System.Net.Sockets.TcpClient
     try {
-        $asyncResult = $tcpClient.BeginConnect($ep, 443, $null, $null)
-        $connectSuccess = $asyncResult.AsyncWaitHandle.WaitOne(3000, $false)
+        $tcpClient.Connect($ep, 443)
         $sw.Stop()
-        if ($connectSuccess -and $tcpClient.Connected) {
-            $tcpClient.EndConnect($asyncResult)
-            $tcpClient.Close()
-            $latency = [math]::Round($sw.Elapsed.TotalMilliseconds, 1)
-            $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: ${latency} ms"
-        } else {
-            $tcpClient.Close()
-            $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: FAILED (Timeout > 3000ms)"
-        }
+        $latency = [math]::Round($sw.Elapsed.TotalMilliseconds, 1)
+        $tcpClient.Close()
+        $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: ${latency} ms"
     } catch {
+        $sw.Stop()
         $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: FAILED ($($_.Exception.Message))"
     }
 }

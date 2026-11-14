@@ -37,6 +37,7 @@
    - Title: `Cannot reach intranet finance portal`
    - Impact: `High` | Urgency: `High` $\rightarrow$ Priority dynamically calculated as **P1 Critical**.
    - SLA Target: **4 Elapsed Clock Hours (24x7)**.
+   - Note that submission generates a unique customer access token (`/api/ticket?id=...&token=...`), ensuring customer status views cannot access internal agent work notes.
 4. Switch to **`http://localhost:8080/agent`** (L1 Operator Console).
 5. Select the newly generated ticket (`NEX-11`):
    - Click **"Start Work (Assign to Me)"** $\rightarrow$ Transitions to `In Progress`.
@@ -48,7 +49,7 @@
 
 ## Phase 3: Active Directory Domain Controller & Authentication (2.5 Minutes)
 **Action:**
-Demonstrate real domain administration inside WSL2 Ubuntu:
+Demonstrate real domain administration inside WSL2 Ubuntu (using dynamically generated domain credentials stored in git-ignored `.ad_credentials.json`):
 1. Show Domain Controller status:
    ```bash
    wsl -u root -d Ubuntu -e samba-tool domain level show
@@ -113,12 +114,22 @@ Demonstrate practical PowerShell diagnostic commands on the host:
    ```bash
    python reporting/report-generator.py --save all
    ```
-2. Run the automated test suite:
+2. Run the automated reporting test suite:
    ```bash
    python -m unittest discover -s reporting/tests -v
    ```
    *Point out:* 13/13 unit tests passing, verifying duration math, 15.75h MTTR, and 85.0% sample SLA compliance.
-3. Conclude with honest project limitations:
+3. Run the Service Desk platform functional tests:
+   ```bash
+   python scripts/test_service_desk_platform.py
+   ```
+   *Point out:* 15/15 HTTP API integration tests passing (CSRF, auth, state machine, customer tokens, input validation).
+4. Run dataset integrity validation:
+   ```bash
+   python scripts/validate-data.py
+   ```
+   *Point out:* 5/5 CSV dataset validations passing with 0 errors.
+5. Conclude with honest project limitations:
    - Nexora Technologies is a fictional organization created for practical skill demonstration.
    - All host commands, packet captures, Samba AD controllers, and Python utilities are real and reproducible on this machine.
    - External cloud platforms (ServiceNow, Jira) are documented with exact production-grade configuration schemas and field mappings.

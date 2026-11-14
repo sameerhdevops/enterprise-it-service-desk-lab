@@ -7,8 +7,9 @@ elapsed-clock-hour SLA timers, and integrated Knowledge Base search.
 
 Zero external dependencies (Python standard library only).
 Security hardened: Localhost binding (127.0.0.1), PBKDF2 authentication,
-role-based authorization, state-machine validation, XSS escaping,
-CSRF tokens, dynamic SLA evaluation, and 10 operational queues.
+dynamic credential bootstrap, role-based authorization, state-machine validation,
+XSS escaping, CSRF verification, dynamic SLA evaluation, customer token protection,
+and 10 operational queues.
 """
 
 import http.server
@@ -21,13 +22,18 @@ import sys
 import html
 import hashlib
 import secrets
+import re
 from datetime import datetime, timezone, timedelta
 
 DEFAULT_PORT = 8080
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexora_servicedesk.db")
+LOCAL_CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".local_credentials.json")
 
-# In-memory active sessions: {session_token: {"username": str, "role": str, "expires": datetime}}
+# Maximum allowed HTTP payload size (64 KB)
+MAX_PAYLOAD_SIZE = 65536
+
+# In-memory active sessions: {session_token: {"username": str, "full_name": str, "role": str, "expires": datetime}}
 ACTIVE_SESSIONS = {}
 
 SLA_POLICY = {
@@ -56,8 +62,11 @@ ALLOWED_TRANSITIONS = {
     "Waiting for Customer": ["In Progress", "Resolved"],
     "Waiting for Vendor": ["In Progress", "Resolved"],
     "Resolved": ["Closed", "In Progress"],
-    "Closed": ["In Progress"]  # Reopening closed ticket requires explicit technician work note
+    "Closed": ["In Progress"]  # Reopening closed ticket resets resolution timestamp
 }
+
+VALID_DEPARTMENTS = ("HR", "Finance", "Operations", "IT", "Engineering", "Sales", "Admin")
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
 def hash_password(password: str, salt: str = None) -> tuple:
     """Hashes a password using PBKDF2-HMAC-SHA256 with a secure salt."""
@@ -70,6 +79,45 @@ def verify_password(password: str, salt: str, expected_hash: str) -> bool:
     """Verifies a password against a stored salt and hash using constant-time comparison."""
     key, _ = hash_password(password, salt)
     return secrets.compare_digest(key, expected_hash)
+
+def get_or_create_bootstrap_password() -> str:
+    """
+    Obtains the initial bootstrap password for alex.chen from:
+    1. NEXORA_PORTAL_ADMIN_PASS environment variable, or
+    2. Local ignored secrets file (.local_credentials.json), or
+    3. Securely generated random token saved to .local_credentials.json
+    """
+    env_pass = os.environ.get("NEXORA_PORTAL_ADMIN_PASS")
+    if env_pass:
+        return env_pass.strip()
+
+    if os.path.exists(LOCAL_CREDENTIALS_FILE):
+        try:
+            with open(LOCAL_CREDENTIALS_FILE, "r", encoding="utf-8") as f:
+                creds = json.load(f)
+                if "bootstrap_password" in creds:
+                    return creds["bootstrap_password"]
+        except Exception:
+            pass
+
+    generated_pass = secrets.token_urlsafe(16)
+    try:
+        with open(LOCAL_CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "username": "alex.chen",
+                "bootstrap_password": generated_pass,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "note": "Local bootstrap secret for IT Service Desk. Ignored by Git."
+            }, f, indent=2)
+        if hasattr(os, "chmod"):
+            try:
+                os.chmod(LOCAL_CREDENTIALS_FILE, 0o600)
+            except OSError:
+                pass
+    except Exception as e:
+        print(f"[WARN] Could not write local credentials file: {e}", file=sys.stderr)
+
+    return generated_pass
 
 def init_db(db_path=DEFAULT_DB_FILE):
     conn = sqlite3.connect(db_path)
@@ -107,7 +155,8 @@ def init_db(db_path=DEFAULT_DB_FILE):
         sla_target_hours REAL NOT NULL,
         sla_breached INTEGER DEFAULT 0,
         description TEXT,
-        resolution_notes TEXT
+        resolution_notes TEXT,
+        customer_access_token TEXT
     )
     """)
     c.execute("""
@@ -122,10 +171,18 @@ def init_db(db_path=DEFAULT_DB_FILE):
     """)
     conn.commit()
 
+    # Schema migration check: ensure customer_access_token exists
+    c.execute("PRAGMA table_info(tickets)")
+    columns = [col[1] for col in c.fetchall()]
+    if "customer_access_token" not in columns:
+        c.execute("ALTER TABLE tickets ADD COLUMN customer_access_token TEXT")
+        conn.commit()
+
     # Seed default L1 agent account if users table is empty
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
-        pwd_hash, salt = hash_password("NexoraSupport#2026")
+        admin_pass = get_or_create_bootstrap_password()
+        pwd_hash, salt = hash_password(admin_pass)
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         c.execute("""
         INSERT INTO users (username, full_name, role, password_hash, salt, created_at)
@@ -138,6 +195,16 @@ def init_db(db_path=DEFAULT_DB_FILE):
     count = c.fetchone()[0]
     if count == 0:
         seed_tickets(conn)
+    else:
+        # Ensure any tickets missing customer_access_token get one generated
+        c.execute("SELECT id FROM tickets WHERE customer_access_token IS NULL OR customer_access_token = ''")
+        missing_tokens = c.fetchall()
+        for row in missing_tokens:
+            token = secrets.token_urlsafe(24)
+            c.execute("UPDATE tickets SET customer_access_token = ? WHERE id = ?", (token, row[0]))
+        if missing_tokens:
+            conn.commit()
+
     conn.close()
 
 def parse_iso_datetime(dt_str: str) -> datetime:
@@ -210,19 +277,20 @@ def seed_tickets(conn):
         due_str = (created_dt + timedelta(hours=target_hours)).strftime("%Y-%m-%d %H:%M:%S")
         resolved_str = (created_dt + timedelta(hours=res_hours)).strftime("%Y-%m-%d %H:%M:%S") if status == "Resolved" else None
         breached_val = 1 if (res_hours > target_hours) else 0
+        customer_tok = secrets.token_urlsafe(24)
         
         c.execute("""
         INSERT INTO tickets (
             key, title, request_type, caller_name, caller_email, department,
             impact, urgency, priority, status, assigned_to, assignment_group,
             created_at, updated_at, resolved_at, due_at, sla_target_hours, sla_breached,
-            description, resolution_notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            description, resolution_notes, customer_access_token
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             key, title, req_type, caller, email, dept,
             impact, urgency, priority, status, assignee, group,
             created_str, created_str, resolved_str, due_str, target_hours, breached_val,
-            f"User reported: {title}", notes
+            f"User reported: {title}", notes, customer_tok
         ))
         
         c.execute("""
@@ -264,12 +332,35 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         return None
 
     def require_agent_auth(self):
-        """Verifies caller is an authenticated agent, sending 401 JSON if not."""
+        """Verifies caller is an authenticated agent or admin, sending 401 JSON if not."""
         sess = self.get_session()
-        if not sess:
-            self.send_json({"status": "error", "message": "Authentication required. Please sign in to the L1 Agent Console."}, 401)
+        if not sess or sess.get("role") not in ("agent", "admin"):
+            self.send_json({"status": "error", "message": "Authentication required. Please sign in with an agent account."}, 401)
             return None
         return sess
+
+    def verify_csrf_and_origin(self) -> bool:
+        """
+        Enforces same-origin request verification on mutating POST endpoints.
+        Rejects cross-origin POSTs and ensures valid Origin/Referer headers.
+        """
+        origin = self.headers.get("Origin")
+        referer = self.headers.get("Referer")
+        allowed_hosts = ("127.0.0.1", "localhost")
+
+        if origin:
+            parsed = urllib.parse.urlparse(origin)
+            if parsed.hostname not in allowed_hosts:
+                self.send_json({"status": "error", "message": "Forbidden: Cross-origin requests not permitted."}, 403)
+                return False
+
+        if referer:
+            parsed = urllib.parse.urlparse(referer)
+            if parsed.hostname not in allowed_hosts:
+                self.send_json({"status": "error", "message": "Forbidden: Invalid referer host."}, 403)
+                return False
+
+        return True
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -294,10 +385,22 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404, "Page not found")
             
     def do_POST(self):
+        if not self.verify_csrf_and_origin():
+            return
+
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
-        length = int(self.headers.get('content-length', 0))
-        body = self.rfile.read(length).decode('utf-8')
+        
+        try:
+            length = int(self.headers.get('content-length', 0))
+        except (ValueError, TypeError):
+            length = 0
+
+        if length > MAX_PAYLOAD_SIZE:
+            self.send_json({"status": "error", "message": f"Payload too large (Max {MAX_PAYLOAD_SIZE} bytes)"}, 413)
+            return
+
+        body = self.rfile.read(length).decode('utf-8', errors='replace')
         try:
             data = json.loads(body)
         except Exception:
@@ -321,6 +424,10 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
         
+        if not username or not password:
+            self.send_json({"status": "error", "message": "Username and password are required"}, 400)
+            return
+
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute("SELECT id, username, full_name, role, password_hash, salt FROM users WHERE username = ?", (username,))
@@ -364,6 +471,10 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"authenticated": False})
 
     def api_get_tickets(self, query):
+        sess = self.require_agent_auth()
+        if not sess:
+            return
+
         queue = query.get("queue", ["all"])[0]
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -376,9 +487,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         now = datetime.now(timezone.utc)
         computed_tickets = [compute_ticket_sla(t, now) for t in all_rows]
         
-        # 10 Defined Queues
-        sess = self.get_session()
-        current_user = sess["full_name"] if sess else "Alex Chen (L1 Lead)"
+        current_user = sess["full_name"]
 
         if queue == "unassigned":
             filtered = [t for t in computed_tickets if not t.get("assigned_to") or t.get("assigned_to") == "Unassigned"]
@@ -404,7 +513,13 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json({"status": "success", "queue": queue, "count": len(filtered), "tickets": filtered})
 
     def api_get_ticket(self, query):
-        key = query.get("key", [""])[0]
+        key = query.get("key", [""])[0].strip()
+        customer_token = query.get("token", [""])[0].strip()
+
+        if not key:
+            self.send_json({"status": "error", "message": "Missing ticket key"}, 400)
+            return
+
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -415,15 +530,27 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"status": "error", "message": "Ticket not found"}, 404)
             return
             
-        ticket_data = compute_ticket_sla(dict(ticket))
+        ticket_dict = dict(ticket)
+        sess = self.get_session()
+        is_agent = sess and sess.get("role") in ("agent", "admin")
+
+        # Security check: if not agent, customer must provide matching customer_access_token
+        if not is_agent:
+            stored_token = ticket_dict.get("customer_access_token")
+            if not customer_token or not stored_token or not secrets.compare_digest(customer_token, stored_token):
+                conn.close()
+                self.send_json({"status": "error", "message": "Access denied. Valid agent session or ticket-specific customer token required."}, 401)
+                return
+
+        ticket_data = compute_ticket_sla(ticket_dict)
         c.execute("SELECT * FROM ticket_activity WHERE ticket_key = ? ORDER BY id ASC", (key,))
         activities = [dict(r) for r in c.fetchall()]
         conn.close()
         
-        sess = self.get_session()
-        # If not authenticated as agent, filter out internal work notes to protect security
-        if not sess:
+        # Strip internal work notes and security tokens from customer view
+        if not is_agent:
             activities = [a for a in activities if a["activity_type"] != "WORK_NOTE"]
+            ticket_data.pop("customer_access_token", None)
             
         ticket_data["activities"] = activities
         self.send_json({"status": "success", "ticket": ticket_data})
@@ -442,6 +569,25 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         if not title or not caller_name or not caller_email:
             self.send_json({"status": "error", "message": "Missing required fields: title, caller_name, and caller_email are mandatory."}, 400)
             return
+
+        if len(title) < 3 or len(title) > 200:
+            self.send_json({"status": "error", "message": "Title must be between 3 and 200 characters."}, 400)
+            return
+
+        if len(caller_name) < 2 or len(caller_name) > 100:
+            self.send_json({"status": "error", "message": "Caller name must be between 2 and 100 characters."}, 400)
+            return
+
+        if len(caller_email) > 120 or not EMAIL_REGEX.match(caller_email):
+            self.send_json({"status": "error", "message": "Invalid email address format."}, 400)
+            return
+
+        if len(description) > 4000:
+            self.send_json({"status": "error", "message": "Description exceeds maximum length of 4000 characters."}, 400)
+            return
+
+        if department not in VALID_DEPARTMENTS:
+            department = "Operations"
             
         if impact not in ("High", "Medium", "Low"):
             impact = "Medium"
@@ -453,6 +599,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         now_dt = datetime.now(timezone.utc)
         now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
         due_str = (now_dt + timedelta(hours=target_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        customer_token = secrets.token_urlsafe(24)
         
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
@@ -464,12 +611,12 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         INSERT INTO tickets (
             key, title, request_type, caller_name, caller_email, department,
             impact, urgency, priority, status, assigned_to, assignment_group,
-            created_at, updated_at, due_at, sla_target_hours, sla_breached, description
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            created_at, updated_at, due_at, sla_target_hours, sla_breached, description, customer_access_token
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             new_key, title, request_type, caller_name, caller_email, department,
             impact, urgency, priority, "New", "Unassigned", "L1 Service Desk",
-            now_str, now_str, due_str, target_hours, 0, description
+            now_str, now_str, due_str, target_hours, 0, description, customer_token
         ))
         
         c.execute("""
@@ -479,16 +626,22 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         
         conn.commit()
         conn.close()
-        self.send_json({"status": "success", "key": new_key, "priority": priority, "target_hours": target_hours, "due_at": due_str})
+        self.send_json({
+            "status": "success",
+            "key": new_key,
+            "customer_access_token": customer_token,
+            "priority": priority,
+            "target_hours": target_hours,
+            "due_at": due_str
+        })
 
     def api_update_ticket(self, data):
-        # Authenticate technician for mutations
         sess = self.require_agent_auth()
         if not sess:
             return
             
-        key = data.get("key")
-        new_status = data.get("status")
+        key = data.get("key", "").strip()
+        new_status = data.get("status", "").strip()
         assigned_to = data.get("assigned_to")
         resolution = data.get("resolution_notes")
         author = sess["full_name"]
@@ -518,7 +671,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
                 }, 400)
                 return
                 
-            if new_status == "Resolved" and not resolution:
+            if new_status == "Resolved" and (not resolution or not resolution.strip()):
                 conn.close()
                 self.send_json({
                     "status": "error",
@@ -532,28 +685,43 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         if new_status:
             updates.append("status = ?")
             params.append(new_status)
-            if new_status in ("Resolved", "Closed") and not ticket["resolved_at"]:
+            
+            # Reopening: Transitioning from Resolved or Closed back to In Progress
+            if new_status == "In Progress" and current_status in ("Resolved", "Closed"):
+                updates.append("resolved_at = NULL")
+                updates.append("sla_breached = 0")
+            
+            # Resolution: Transitioning to Resolved or Closed
+            elif new_status == "Resolved":
                 updates.append("resolved_at = ?")
                 params.append(now_str)
-                # Compute final SLA breach flag
+                # Compute elapsed hours against continuous clock
                 created_dt = parse_iso_datetime(ticket["created_at"])
                 if created_dt:
                     elapsed = (now_dt - created_dt).total_seconds() / 3600.0
                     breached = 1 if (elapsed > float(ticket["sla_target_hours"])) else 0
                     updates.append("sla_breached = ?")
                     params.append(breached)
-                    
-        if assigned_to:
+
+        if assigned_to is not None:
             updates.append("assigned_to = ?")
             params.append(assigned_to)
-        if resolution:
+        if resolution is not None:
             updates.append("resolution_notes = ?")
-            params.append(resolution)
+            params.append(resolution.strip())
             
         params.append(key)
         c.execute(f"UPDATE tickets SET {', '.join(updates)} WHERE key = ?", params)
         
-        msg = f"Transitioned to {new_status}: {resolution}" if (new_status and resolution) else (f"Transitioned to {new_status}" if new_status else "Ticket details updated")
+        if new_status == "In Progress" and current_status in ("Resolved", "Closed"):
+            msg = f"Ticket Reopened by technician {author}. Previous resolution reset; ticket returned to In Progress."
+        elif new_status and resolution:
+            msg = f"Transitioned to {new_status}: {resolution}"
+        elif new_status:
+            msg = f"Transitioned to {new_status}"
+        else:
+            msg = "Ticket details updated"
+
         c.execute("""
         INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
         VALUES (?, ?, ?, ?, ?)
@@ -564,27 +732,55 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json({"status": "success", "message": msg, "current_status": new_status or current_status})
 
     def api_add_comment(self, data):
-        key = data.get("key")
-        comment_type = data.get("type", "CUSTOMER_COMMENT")
+        key = data.get("key", "").strip()
+        comment_type = data.get("type", "CUSTOMER_COMMENT").strip()
         message = data.get("message", "").strip()
+        token = data.get("customer_access_token", "").strip()
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         
-        if not message:
-            self.send_json({"status": "error", "message": "Comment message cannot be empty"}, 400)
+        if not key or not message:
+            self.send_json({"status": "error", "message": "Ticket key and comment message cannot be empty"}, 400)
             return
 
-        # Internal work notes require agent session
+        if len(message) > 2000:
+            self.send_json({"status": "error", "message": "Comment message exceeds 2000 character limit"}, 400)
+            return
+
+        if comment_type not in ("WORK_NOTE", "CUSTOMER_COMMENT"):
+            self.send_json({"status": "error", "message": "Invalid comment type"}, 400)
+            return
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM tickets WHERE key = ?", (key,))
+        ticket = c.fetchone()
+        if not ticket:
+            conn.close()
+            self.send_json({"status": "error", "message": "Ticket not found"}, 404)
+            return
+
+        sess = self.get_session()
+        is_agent = sess and sess.get("role") in ("agent", "admin")
+
         if comment_type == "WORK_NOTE":
-            sess = self.require_agent_auth()
-            if not sess:
+            if not is_agent:
+                conn.close()
+                self.send_json({"status": "error", "message": "Agent authentication required to post internal work notes"}, 401)
                 return
             author = sess["full_name"]
         else:
-            sess = self.get_session()
-            author = sess["full_name"] if sess else data.get("author", "Customer")
-            
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
+            # Customer comment
+            if is_agent:
+                author = sess["full_name"]
+            else:
+                stored_token = ticket["customer_access_token"]
+                if not token or not stored_token or not secrets.compare_digest(token, stored_token):
+                    conn.close()
+                    self.send_json({"status": "error", "message": "Access denied. Valid customer token required to add comment."}, 401)
+                    return
+                author = ticket["caller_name"]  # Disallow caller impersonation
+
         c.execute("""
         INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
         VALUES (?, ?, ?, ?, ?)
@@ -595,6 +791,10 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json({"status": "success", "message": f"{comment_type} recorded successfully"})
 
     def api_get_stats(self):
+        sess = self.require_agent_auth()
+        if not sess:
+            return
+
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -623,10 +823,14 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             "sla_breached_count": sla_breached_count,
             "sla_at_risk_count": sla_at_risk_count,
             "sla_compliance_rate": sla_compliance,
-            "l1_resolution_rate": f"{(resolved/total*100):.1f}%" if total > 0 else "0.0%"
+            "resolved_ticket_share": f"{(resolved/total*100):.1f}%" if total > 0 else "0.0%"
         })
 
     def api_export_tickets(self):
+        sess = self.require_agent_auth()
+        if not sess:
+            return
+
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -644,7 +848,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Frame-Options', 'SAMEORIGIN')
-        self.send_header('Content-Security-Policy', "default-src 'self' 'unsafe-inline';")
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;")
         if headers:
             for k, v in headers:
                 self.send_header(k, v)
@@ -686,6 +890,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
   .btn:hover { background: var(--primary-dark); }
   .btn-cancel { background: #ebecf0; color: #42526e; margin-left: 8px; }
   .alert-success { background: #e3fcef; border: 1px solid #abf5d1; color: #006644; padding: 12px; border-radius: 4px; margin-bottom: 16px; display: none; }
+  .track-box { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 18px; margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-end; }
 </style>
 </head>
 <body>
@@ -696,9 +901,24 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
 <div class="container">
   <div class="hero">
     <h2>Welcome to the IT Service Portal</h2>
-    <p>Select a service request category below to submit an incident or service request.</p>
+    <p>Select a service request category below to submit an incident or track existing requests.</p>
   </div>
   <div id="success-banner" class="alert-success"></div>
+
+  <div class="track-box">
+    <div style="flex:1;">
+      <label style="font-size:12px; font-weight:600; color:#344563; display:block; margin-bottom:4px;">Track Existing Ticket</label>
+      <input type="text" id="trackKey" placeholder="Ticket Key (e.g. NEX-101)" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; box-sizing:border-box;">
+    </div>
+    <div style="flex:2;">
+      <label style="font-size:12px; font-weight:600; color:#344563; display:block; margin-bottom:4px;">Customer Security Token</label>
+      <input type="text" id="trackToken" placeholder="Paste Customer Access Token" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; box-sizing:border-box;">
+    </div>
+    <div>
+      <button class="btn" type="button" onclick="trackTicket()">Track Ticket</button>
+    </div>
+  </div>
+
   <div class="grid">
     <div class="card" onclick="openRequest('Password Reset / Account Unlock')">
       <h3>🔑 Password Reset / Unlock</h3>
@@ -825,16 +1045,30 @@ async function submitTicket(e) {
   };
   const res = await fetch('/api/tickets', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
   closeModal();
   document.getElementById('ticketForm').reset();
   const banner = document.getElementById('success-banner');
-  banner.innerHTML = `<strong>Ticket Logged Successfully!</strong> Ticket ID: <strong>${escapeHtml(data.key)}</strong> | Priority: <strong>${escapeHtml(data.priority)}</strong> (Target SLA: ${escapeHtml(data.target_hours)} elapsed clock hours, Due: ${escapeHtml(data.due_at)}). An L1 Service Desk agent has been notified.`;
+  banner.innerHTML = `<strong>Ticket Logged Successfully!</strong> Ticket ID: <strong>${escapeHtml(data.key)}</strong> | Customer Token: <code style="background:#fff; padding:2px 6px; border-radius:3px;">${escapeHtml(data.customer_access_token)}</code><br><small>Save your customer token to check ticket progress or submit follow-up comments.</small>`;
   banner.style.display = 'block';
   window.scrollTo({top: 0, behavior: 'smooth'});
+}
+async function trackTicket() {
+  const k = document.getElementById('trackKey').value.trim();
+  const tok = document.getElementById('trackToken').value.trim();
+  if (!k || !tok) { alert('Please enter both Ticket Key and Customer Token'); return; }
+  const res = await fetch(`/api/ticket?key=${encodeURIComponent(k)}&token=${encodeURIComponent(tok)}`);
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.message || 'Access denied');
+    return;
+  }
+  const banner = document.getElementById('success-banner');
+  banner.innerHTML = `<strong>Ticket ${escapeHtml(data.ticket.key)}: ${escapeHtml(data.ticket.title)}</strong><br>Status: <strong>${escapeHtml(data.ticket.status)}</strong> | Priority: <strong>${escapeHtml(data.ticket.priority)}</strong> | SLA Elapsed: <strong>${escapeHtml(data.ticket.elapsed_hours)} hrs</strong>`;
+  banner.style.display = 'block';
 }
 </script>
 </body>
@@ -955,11 +1189,11 @@ async function submitTicket(e) {
     <form onsubmit="handleLogin(event)">
       <div style="margin-bottom:12px;">
         <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Username</label>
-        <input type="text" id="loginUser" value="alex.chen" required style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
+        <input type="text" id="loginUser" placeholder="e.g. alex.chen" required style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
       </div>
       <div style="margin-bottom:16px;">
         <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Password</label>
-        <input type="password" id="loginPass" value="NexoraSupport#2026" required style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
+        <input type="password" id="loginPass" placeholder="Enter agent password" required style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
       </div>
       <div style="text-align:right;">
         <button type="button" class="btn" onclick="closeLoginModal()">Cancel</button>
@@ -980,18 +1214,22 @@ function escapeHtml(str) {
 }
 
 async function checkAuth() {
-  const res = await fetch('/api/auth/status');
-  const d = await res.json();
-  if (d.authenticated) {
-    currentUser = d.user;
-    document.getElementById('userNameDisplay').innerText = currentUser.full_name;
-    document.getElementById('authBtn').innerText = 'Sign Out';
-    document.getElementById('authBtn').onclick = handleLogout;
-  } else {
-    currentUser = null;
-    document.getElementById('userNameDisplay').innerText = 'Not Signed In';
-    document.getElementById('authBtn').innerText = 'Sign In';
-    document.getElementById('authBtn').onclick = openLoginModal;
+  try {
+    const res = await fetch('/api/auth/status');
+    const d = await res.json();
+    if (d.authenticated) {
+      currentUser = d.user;
+      document.getElementById('userNameDisplay').innerText = currentUser.full_name;
+      document.getElementById('authBtn').innerText = 'Sign Out';
+      document.getElementById('authBtn').onclick = handleLogout;
+    } else {
+      currentUser = null;
+      document.getElementById('userNameDisplay').innerText = 'Not Signed In';
+      document.getElementById('authBtn').innerText = 'Sign In';
+      document.getElementById('authBtn').onclick = openLoginModal;
+    }
+  } catch (e) {
+    console.error('Auth check error:', e);
   }
 }
 
@@ -1000,216 +1238,250 @@ function closeLoginModal() { document.getElementById('loginModal').classList.rem
 
 async function handleLogin(e) {
   e.preventDefault();
-  const u = document.getElementById('loginUser').value;
-  const p = document.getElementById('loginPass').value;
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value.trim();
+  const errDiv = document.getElementById('loginError');
+  errDiv.style.display = 'none';
+
   const res = await fetch('/api/auth/login', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
     body: JSON.stringify({username: u, password: p})
   });
   const data = await res.json();
-  if (res.ok) {
+  if (res.ok && data.status === 'success') {
     closeLoginModal();
     await checkAuth();
-    loadStats();
-    loadQueue(currentQueue);
+    await loadStats();
+    await loadQueue(currentQueue);
   } else {
-    const err = document.getElementById('loginError');
-    err.innerText = data.message || 'Login failed';
-    err.style.display = 'block';
+    errDiv.innerText = data.message || 'Invalid username or password';
+    errDiv.style.display = 'block';
   }
 }
 
 async function handleLogout() {
-  await fetch('/api/auth/logout', {method: 'POST'});
+  await fetch('/api/auth/logout', {
+    method: 'POST',
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  });
   await checkAuth();
-  loadStats();
-  loadQueue(currentQueue);
+  document.getElementById('ticketList').innerHTML = '<div style="padding:20px; color:#5e6c84;">Please sign in to view queues.</div>';
+  document.getElementById('ticketDetail').innerHTML = '<div style="text-align:center; padding:60px; color:#5e6c84;"><h3>Authentication Required</h3><p>Sign in with an agent account to manage tickets.</p></div>';
 }
 
 async function loadStats() {
-  const res = await fetch('/api/stats');
-  const d = await res.json();
-  document.getElementById('stTotal').innerText = d.total_tickets;
-  document.getElementById('stOpen').innerText = d.open_backlog;
-  document.getElementById('stP1').innerText = d.p1_critical_open;
-  document.getElementById('stSLA').innerText = d.sla_compliance_rate;
+  if (!currentUser) return;
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) return;
+    const s = await res.json();
+    document.getElementById('stTotal').innerText = s.total_tickets;
+    document.getElementById('stOpen').innerText = s.open_backlog;
+    document.getElementById('stP1').innerText = s.p1_critical_open;
+    document.getElementById('stSLA').innerText = s.sla_compliance_rate;
+  } catch (e) {
+    console.error('Failed to load stats:', e);
+  }
 }
 
-async function loadQueue(queue, el) {
-  currentQueue = queue;
-  if (el) {
-    document.querySelectorAll('aside a').forEach(a => a.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('queueTitle').innerText = el.querySelector('span').innerText;
+async function loadQueue(queue, elem) {
+  if (!currentUser) {
+    document.getElementById('ticketList').innerHTML = '<div style="padding:20px; color:#5e6c84;">Please sign in to view incident queues.</div>';
+    return;
   }
-  const res = await fetch('/api/tickets?queue=' + queue);
-  const data = await res.json();
-  const list = document.getElementById('ticketList');
-  list.innerHTML = '';
-  
-  const qBadge = document.getElementById('q-' + queue);
-  if (qBadge) qBadge.innerText = data.count;
-  
-  data.tickets.forEach(t => {
-    const item = document.createElement('div');
-    item.className = 'ticket-item' + (selectedKey === t.key ? ' active' : '');
-    item.onclick = () => selectTicket(t.key);
-    
-    let slaClass = 'sla-ok';
-    if (t.sla_breached) slaClass = 'sla-breached';
-    else if (t.sla_at_risk) slaClass = 'sla-risk';
-    
-    item.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="ticket-key">${escapeHtml(t.key)}</span>
-        <div>
-          <span class="sla-badge ${slaClass}">${escapeHtml(t.sla_status)}</span>
-          <span class="priority-badge p-${escapeHtml(t.priority)}">${escapeHtml(t.priority)} ${escapeHtml(t.status)}</span>
+  currentQueue = queue;
+  if (elem) {
+    document.querySelectorAll('aside a').forEach(a => a.classList.remove('active'));
+    elem.classList.add('active');
+  }
+  const titles = {
+    'all': 'All Incidents',
+    'unassigned': 'Unassigned Incidents',
+    'assigned_me': 'Assigned to Me',
+    'p1': 'P1 - Critical Priority',
+    'p2': 'P2 - High Priority',
+    'wait_customer': 'Waiting for Customer',
+    'wait_vendor': 'Waiting for Vendor',
+    'sla_risk': 'SLA at Risk (>75% Elapsed)',
+    'sla_breached': 'SLA Breached Incidents',
+    'resolved': 'Resolved & Closed Archive'
+  };
+  document.getElementById('queueTitle').innerText = titles[queue] || 'Incident Queue';
+
+  try {
+    const res = await fetch('/api/tickets?queue=' + queue);
+    if (!res.ok) {
+      if (res.status === 401) { openLoginModal(); }
+      return;
+    }
+    const data = await res.json();
+    document.getElementById('q-' + queue).innerText = data.count;
+
+    const listDiv = document.getElementById('ticketList');
+    if (data.tickets.length === 0) {
+      listDiv.innerHTML = '<div style="padding:20px; text-align:center; color:#5e6c84;">No tickets in this queue.</div>';
+      return;
+    }
+
+    listDiv.innerHTML = data.tickets.map(t => `
+      <div class="ticket-item ${selectedKey === t.key ? 'active' : ''}" onclick="selectTicket('${escapeHtml(t.key)}')">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="ticket-key">${escapeHtml(t.key)}</span>
+          <span class="priority-badge p-${escapeHtml(t.priority)}">${escapeHtml(t.priority)}</span>
+        </div>
+        <div class="ticket-title">${escapeHtml(t.title)}</div>
+        <div class="ticket-meta">
+          <span>${escapeHtml(t.caller_name)} (${escapeHtml(t.department)})</span>
+          <span>&bull;</span>
+          <span class="sla-badge ${t.sla_breached ? 'sla-breached' : (t.sla_at_risk ? 'sla-risk' : 'sla-ok')}">${escapeHtml(t.sla_status)} (${escapeHtml(t.elapsed_hours)}h / ${escapeHtml(t.sla_target_hours)}h)</span>
         </div>
       </div>
-      <div class="ticket-title">${escapeHtml(t.title)}</div>
-      <div class="ticket-meta">
-        <span>${escapeHtml(t.caller_name)} (${escapeHtml(t.department)})</span>
-        <span>•</span>
-        <span>${escapeHtml(t.assigned_to || 'Unassigned')}</span>
-      </div>
-    `;
-    list.appendChild(item);
-  });
-  if (data.tickets.length > 0 && !selectedKey) {
-    selectTicket(data.tickets[0].key);
+    `).join('');
+  } catch (e) {
+    console.error('Queue load failure:', e);
   }
 }
 
 async function selectTicket(key) {
   selectedKey = key;
   document.querySelectorAll('.ticket-item').forEach(el => el.classList.remove('active'));
+
   const res = await fetch('/api/ticket?key=' + encodeURIComponent(key));
+  if (!res.ok) {
+    if (res.status === 401) openLoginModal();
+    return;
+  }
   const data = await res.json();
-  if (!res.ok) return;
   const t = data.ticket;
-  const detail = document.getElementById('ticketDetail');
-  
-  let actsHtml = '';
-  t.activities.forEach(a => {
-    const isWorkNote = a.activity_type === 'WORK_NOTE';
-    actsHtml += `
-      <div class="activity-item ${isWorkNote ? 'act-work-note' : ''}">
-        <div style="font-size:11px; color:#5e6c84; margin-bottom:4px;">
-          <strong>${escapeHtml(a.author)}</strong> • ${escapeHtml(a.timestamp)} • 
-          <span style="font-weight:600; color:${isWorkNote ? '#ff8b00' : '#0052cc'};">[${escapeHtml(a.activity_type)}]</span>
-        </div>
-        <div>${escapeHtml(a.message)}</div>
-      </div>
-    `;
-  });
 
-  let slaClass = 'sla-ok';
-  if (t.sla_breached) slaClass = 'sla-breached';
-  else if (t.sla_at_risk) slaClass = 'sla-risk';
-
-  detail.innerHTML = `
+  const detailDiv = document.getElementById('ticketDetail');
+  detailDiv.innerHTML = `
     <div class="detail-card">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
           <span class="ticket-key" style="font-size:16px;">${escapeHtml(t.key)}</span>
-          <h2 style="margin:6px 0 10px;">${escapeHtml(t.title)}</h2>
+          <span class="priority-badge p-${escapeHtml(t.priority)}" style="margin-left:8px;">${escapeHtml(t.priority)} (${escapeHtml(t.sla_target_hours)}h Target)</span>
+          <h2 style="margin:8px 0 4px; font-size:18px;">${escapeHtml(t.title)}</h2>
           <div style="font-size:12px; color:#5e6c84;">
-            Caller: <strong>${escapeHtml(t.caller_name)}</strong> (${escapeHtml(t.caller_email)}) • Dept: <strong>${escapeHtml(t.department)}</strong> • Type: <strong>${escapeHtml(t.request_type)}</strong>
+            Caller: <strong>${escapeHtml(t.caller_name)}</strong> (${escapeHtml(t.caller_email)}) &bull; Dept: <strong>${escapeHtml(t.department)}</strong>
           </div>
         </div>
         <div style="text-align:right;">
-          <span class="priority-badge p-${escapeHtml(t.priority)}" style="font-size:13px; padding:3px 8px;">${escapeHtml(t.priority)}</span>
-          <div style="margin-top:6px;"><span class="sla-badge ${slaClass}" style="font-size:11px; padding:3px 6px;">${escapeHtml(t.sla_status)} (${t.elapsed_hours}h / ${t.sla_target_hours}h target)</span></div>
-          <div style="font-size:11px; margin-top:4px; color:#5e6c84;">Due: ${escapeHtml(t.due_at)}</div>
+          <span style="display:inline-block; padding:4px 10px; background:#dfe1e6; border-radius:4px; font-size:12px; font-weight:700;">${escapeHtml(t.status)}</span>
+          <div style="margin-top:6px; font-size:11px;" class="sla-badge ${t.sla_breached ? 'sla-breached' : (t.sla_at_risk ? 'sla-risk' : 'sla-ok')}">
+            ${escapeHtml(t.sla_status)}: ${escapeHtml(t.elapsed_hours)}h elapsed
+          </div>
         </div>
       </div>
-      <hr style="border:0; border-top:1px solid #dfe1e6; margin:14px 0;">
-      <div>
-        <h4 style="margin:0 0 6px;">Description</h4>
-        <p style="font-size:13px; line-height:1.5; margin:0;">${escapeHtml(t.description)}</p>
+
+      <div style="margin-top:16px; padding:12px; background:#f4f5f7; border-radius:4px; font-size:13px; line-height:1.5;">
+        <strong>Description:</strong><br>${escapeHtml(t.description)}
       </div>
+
       ${t.resolution_notes ? `
-      <div style="background:#e3fcef; border:1px solid #abf5d1; padding:10px; border-radius:4px; margin-top:12px;">
-        <h4 style="margin:0 0 4px; color:#006644;">Resolution Notes</h4>
-        <p style="margin:0; font-size:12px; color:#006644;">${escapeHtml(t.resolution_notes)}</p>
-      </div>` : ''}
+        <div style="margin-top:12px; padding:12px; background:#e3fcef; border-left:4px solid #00875a; border-radius:4px; font-size:13px;">
+          <strong>Technical Resolution Notes:</strong><br>${escapeHtml(t.resolution_notes)}
+        </div>
+      ` : ''}
+
       <div class="action-bar">
-        <button class="btn btn-primary" onclick="updateTicket('${escapeHtml(t.key)}', 'In Progress', 'Alex Chen (L1 Lead)')">Start Work (Assign to Me)</button>
-        <button class="btn" onclick="updateTicket('${escapeHtml(t.key)}', 'Waiting for Customer')">Wait for Customer</button>
-        <button class="btn" onclick="updateTicket('${escapeHtml(t.key)}', 'Waiting for Vendor')">Wait for Vendor</button>
-        <button class="btn btn-success" onclick="resolveTicketPrompt('${escapeHtml(t.key)}')">Resolve Incident</button>
-        <button class="btn" onclick="updateTicket('${escapeHtml(t.key)}', 'Closed')">Close Ticket</button>
+        <span style="font-size:12px; font-weight:600; line-height:28px;">Actions:</span>
+        <button class="btn" onclick="updateTicketState('${escapeHtml(t.key)}', 'Assigned', 'Alex Chen')">Assign to Me</button>
+        <button class="btn" onclick="updateTicketState('${escapeHtml(t.key)}', 'In Progress')">Start Progress</button>
+        <button class="btn" onclick="updateTicketState('${escapeHtml(t.key)}', 'Waiting for Customer')">Wait for User</button>
+        <button class="btn" onclick="updateTicketState('${escapeHtml(t.key)}', 'Waiting for Vendor')">Wait for Vendor</button>
+        <button class="btn btn-success" onclick="promptResolve('${escapeHtml(t.key)}')">Resolve Ticket</button>
+        <button class="btn" onclick="updateTicketState('${escapeHtml(t.key)}', 'Closed')">Close</button>
+        ${(t.status === 'Resolved' || t.status === 'Closed') ? `<button class="btn" style="background:#ff8b00; color:white;" onclick="reopenTicket('${escapeHtml(t.key)}')">Reopen Ticket</button>` : ''}
       </div>
     </div>
 
     <div class="detail-card">
-      <h4 style="margin-top:0;">Record Work Note / Customer Communication</h4>
-      <textarea id="commentBox" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #dfe1e6; border-radius:4px; font-size:13px;" rows="3" placeholder="Log technical findings, switch ports, IP addresses, or customer communication..."></textarea>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <button class="btn" style="background:#fffbf0; border-color:#f5cd47;" onclick="postComment('${escapeHtml(t.key)}', 'WORK_NOTE')">🔒 Add Internal Work Note</button>
-        <button class="btn" onclick="postComment('${escapeHtml(t.key)}', 'CUSTOMER_COMMENT')">💬 Send Public Customer Comment</button>
+      <h3 style="margin-top:0; font-size:14px;">Activity & Communications Trail</h3>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <textarea id="commentBox" rows="2" placeholder="Type public comment or internal technician work note..." style="flex:1; padding:8px; border:1px solid #dfe1e6; border-radius:4px; font-size:12px;"></textarea>
+        <button class="btn btn-primary" onclick="postComment('${escapeHtml(t.key)}', 'CUSTOMER_COMMENT')">Add Public</button>
+        <button class="btn" style="background:#ff8b00; color:white;" onclick="postComment('${escapeHtml(t.key)}', 'WORK_NOTE')">Work Note</button>
       </div>
-    </div>
 
-    <div class="detail-card">
-      <h4 style="margin-top:0;">Audit Trail & Ticket History</h4>
-      <div class="activity-log">${actsHtml}</div>
+      <div class="activity-log">
+        ${(t.activities || []).map(a => `
+          <div class="activity-item ${a.activity_type === 'WORK_NOTE' ? 'act-work-note' : ''}">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <strong>${escapeHtml(a.author)}</strong>
+              <span style="color:#5e6c84;">${escapeHtml(a.timestamp)} &bull; ${escapeHtml(a.activity_type)}</span>
+            </div>
+            <div>${escapeHtml(a.message)}</div>
+          </div>
+        `).join('')}
+      </div>
     </div>
   `;
 }
 
-async function updateTicket(key, status, assignee) {
-  if (!currentUser) { openLoginModal(); return; }
+async function updateTicketState(key, status, assignee) {
   const payload = { key: key, status: status };
   if (assignee) payload.assigned_to = assignee;
   const res = await fetch('/api/ticket/update', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
   if (!res.ok) {
-    alert(data.message || 'Update failed');
+    alert(data.message || 'Transition rejected');
     return;
   }
-  loadStats();
-  loadQueue(currentQueue);
-  selectTicket(key);
+  await loadStats();
+  await loadQueue(currentQueue);
+  await selectTicket(key);
 }
 
-async function resolveTicketPrompt(key) {
-  if (!currentUser) { openLoginModal(); return; }
-  const notes = prompt("Enter Resolution Notes (Root cause and corrective action):");
-  if (!notes) return;
-  const payload = {
-    key: key,
-    status: 'Resolved',
-    resolution_notes: notes
-  };
+async function promptResolve(key) {
+  const notes = prompt('Enter technical resolution notes (mandatory for ITIL compliance):');
+  if (!notes) { alert('Resolution aborted: notes are mandatory'); return; }
   const res = await fetch('/api/ticket/update', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({ key: key, status: 'Resolved', resolution_notes: notes })
   });
   const data = await res.json();
   if (!res.ok) {
-    alert(data.message || 'Resolve failed');
+    alert(data.message || 'Failed to resolve ticket');
     return;
   }
-  loadStats();
-  loadQueue(currentQueue);
-  selectTicket(key);
+  await loadStats();
+  await loadQueue(currentQueue);
+  await selectTicket(key);
 }
 
-async function postComment(key, type) {
+async function reopenTicket(key) {
+  const reason = prompt('Enter reason for reopening ticket:');
+  if (!reason) return;
+  const res = await fetch('/api/ticket/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({ key: key, status: 'In Progress', resolution_notes: null })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.message || 'Failed to reopen ticket');
+    return;
+  }
+  await postComment(key, 'WORK_NOTE', 'Ticket reopened by technician: ' + reason);
+  await loadStats();
+  await loadQueue(currentQueue);
+  await selectTicket(key);
+}
+
+async function postComment(key, type, customMsg) {
   if (type === 'WORK_NOTE' && !currentUser) { openLoginModal(); return; }
-  const msg = document.getElementById('commentBox').value;
+  const msg = customMsg || document.getElementById('commentBox').value.trim();
   if (!msg) return;
   const res = await fetch('/api/ticket/comment', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
     body: JSON.stringify({ key: key, type: type, message: msg })
   });
   if (!res.ok) {
@@ -1217,8 +1489,10 @@ async function postComment(key, type) {
     alert(data.message || 'Failed to post comment');
     return;
   }
-  document.getElementById('commentBox').value = '';
-  selectTicket(key);
+  if (!customMsg && document.getElementById('commentBox')) {
+    document.getElementById('commentBox').value = '';
+  }
+  await selectTicket(key);
 }
 
 // Boot sequence

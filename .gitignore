@@ -36,3 +36,9 @@ reporting/reports/*.html
 *.tmp
 *.bak
 *.log
+
+# Local credentials and secrets
+*.credentials.json
+.local_credentials.json
+.ad_credentials.json
+.local-credentials/

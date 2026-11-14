@@ -5,19 +5,24 @@
 version 15.1
 service timestamps debug datetime msec
 service timestamps log datetime msec
-service password-encryption
 !
 hostname NEX-RTR01
 !
 boot-start-marker
 boot-end-marker
 !
-! User Access Security
-enable secret 5 $1$NxR$pQ9XzK7m4bL1wYe8.0gFa/
+! User Access Security & AAA
+! Security Note: Cisco Type 7 passwords ('service password-encryption') use a trivially
+! reversible XOR/Vigenère cipher and are not cryptographically secure.
+! Use Cisco Type 8 (PBKDF2-SHA256) or Type 9 (scrypt) secrets in operational environments.
+username admin privilege 15 secret <LOCAL_ADMIN_SECRET>
+enable secret <LOCAL_ENABLE_SECRET>
 !
 no aaa new-model
 !
-! IP DHCP Pool Configuration
+! IP DHCP Pool Configuration (Router-Managed DHCP Architecture)
+! Note: DHCP is handled locally by NEX-RTR01 for VLAN 10 and VLAN 20.
+! Conflicting 'ip helper-address' relay statements have been omitted from Gi0/1.10.
 ip dhcp excluded-address 192.168.10.1 192.168.10.20
 ip dhcp excluded-address 192.168.20.1 192.168.20.20
 !
@@ -55,7 +60,6 @@ interface GigabitEthernet0/1.10
  description Corporate Users (HR, Finance, Operations, IT, Sales, Engineering)
  encapsulation dot1Q 10
  ip address 192.168.10.1 255.255.255.0
- ip helper-address 192.168.20.10
  ip nat inside
 !
 ! Subinterface for VLAN 20 (Server Farm & Infrastructure)
@@ -63,7 +67,7 @@ interface GigabitEthernet0/1.20
  description Corporate Server Farm (DC, File, Print, App)
  encapsulation dot1Q 20
  ip address 192.168.20.1 255.255.255.0
- ip access-group 101 in
+ ip access-group 101 out
  ip nat inside
 !
 ! Subinterface for VLAN 99 (In-Band Management)
@@ -80,21 +84,34 @@ ip nat inside source list 1 interface GigabitEthernet0/0 overload
 access-list 1 permit 192.168.10.0 0.0.0.255
 access-list 1 permit 192.168.20.0 0.0.0.255
 !
-! Access Control List 101 - Restrict User Access to Server Farm
-access-list 101 remark Permitted Corporate Core Services
-access-list 101 permit tcp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 445
-access-list 101 permit tcp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 88
-access-list 101 permit tcp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 389
-access-list 101 permit udp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 53
-access-list 101 permit icmp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 echo
+! Access Control List 101 - Server Farm Ingress Protection
+! Applied 'out' on GigabitEthernet0/1.20: filters packets exiting the router into VLAN 20.
+! Server response packets destined back to users enter Gi0/1.20 in and exit Gi0/1.10 out,
+! ensuring return traffic is never blocked.
+access-list 101 remark === Permitted Corporate User Access to Server Farm ===
+! SMB / CIFS File Sharing (TCP 445)
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 445
+! Kerberos Authentication & Key Distribution (TCP/UDP 88)
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 88
+access-list 101 permit udp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 88
+! Kerberos Password Change Service (TCP/UDP 464)
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 464
+access-list 101 permit udp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 464
+! Active Directory LDAP Directory Service (TCP/UDP 389)
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 389
+access-list 101 permit udp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 389
+! Domain Name System (UDP/TCP 53)
+access-list 101 permit udp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 53
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 host 192.168.20.10 eq 53
+! ICMP Echo for Diagnostic Reachability Verification
+access-list 101 permit icmp 192.168.10.0 0.0.0.255 host 192.168.20.10 echo
+! Explicit Deny for all other unapproved traffic with syslog logging
 access-list 101 deny ip any any log
 !
 line con 0
- password 7 0822455D0A16
- login
+ login local
 line vty 0 4
- password 7 0822455D0A16
- login
+ login local
  transport input ssh
 !
 end

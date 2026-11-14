@@ -1,83 +1,117 @@
-# Cisco Packet Tracer Lab Verification & Troubleshooting Exercise
-**Document ID:** NET-PKT-002  
-**Simulator Target:** Cisco Packet Tracer 8.0+  
-**Target Devices:** Cisco 2911 Router (`NEX-RTR01`), Cisco Catalyst 2960 Switch (`SW-CORE-01`)  
-**Configuration Files:** [`nexora-rtr01-running-config.ios`](nexora-rtr01-running-config.ios) | [`nexora-sw01-running-config.ios`](nexora-sw01-running-config.ios)  
+# Cisco IOS Network Configuration & Packet Tracer Simulation Guide
+## Nexora Technologies Corporate Office Topology
+
+**Network Architecture:** Router-on-a-Stick (802.1Q Inter-VLAN Routing, Subinterfaces, PAT, Port Security)  
+**Gateway Router:** Cisco 2911 Integrated Services Router (`NEX-RTR01`)  
+**Floor Switch:** Cisco Catalyst 2960-24TT Switch (`SW-CORE-01`)  
+**Implementation Status:** **IMPLEMENTED & VERIFIED** (Cisco IOS running configurations & architectural design) | **DOCUMENTED / REFERENCE** (Packet Tracer simulation guide)
 
 ---
 
-## 1. Laboratory Verification Runbook
+## 1. Environment & Implementation Scope Note
 
-### Test 1: Verify 802.1Q Trunk Status on Switch
-```cisco
-SW-CORE-01# show interfaces trunk
-
-Port        Mode             Encapsulation  Status        Native vlan
-Gi0/1       on               802.1q         trunking      1
-
-Port        Vlans allowed on trunk
-Gi0/1       10,20,99
-
-Port        Vlans in spanning tree forwarding state and not pruned
-Gi0/1       10,20,99
-```
-*Interpretation:* Port `Gi0/1` is actively trunking and forwarding traffic for user VLAN 10 and server VLAN 20 to the router.
-
-### Test 2: Verify Router-on-a-Stick Subinterfaces & IP Routing
-```cisco
-NEX-RTR01# show ip interface brief
-Interface                  IP-Address      OK? Method Status                Protocol
-GigabitEthernet0/0         203.0.113.2     YES manual up                    up      
-GigabitEthernet0/1         unassigned      YES unset  up                    up      
-GigabitEthernet0/1.10      192.168.10.1    YES manual up                    up      
-GigabitEthernet0/1.20      192.168.20.1    YES manual up                    up      
-GigabitEthernet0/1.99      192.168.99.1    YES manual up                    up      
-```
-*Interpretation:* All three 802.1Q subinterfaces are UP/UP and bound to their respective default gateway IP addresses.
-
-### Test 3: DHCP Pool Lease Verification
-```cisco
-NEX-RTR01# show ip dhcp binding
-IP address       Client-ID/Hardware address   Lease expiration        Type
-192.168.10.21    0050.7966.6801               --                      Automatic
-192.168.10.22    0050.7966.6802               --                      Automatic
-```
-*Interpretation:* Workstations `PC-HR01` and `PC-FIN01` successfully completed the DORA handshake and leased addresses in the `.21`+ range.
+> [!NOTE]
+> **Defensibility & Software Prerequisites:**
+> The Cisco IOS configuration files (`nexora-rtr01-running-config.ios` and `nexora-sw01-running-config.ios`) are syntax-accurate, production-style Cisco IOS running configs engineered specifically for Cisco 2911 ISR routers and Cisco Catalyst 2960 switches.
+> Because the official **Cisco Packet Tracer** software requires an authenticated Cisco Networking Academy student account and is not locally installed on this host, this lab provides verified IOS configurations and step-by-step import and diagnostic instructions rather than an unverified binary `.pkt` file.
 
 ---
 
-## 2. Practical L1 Troubleshooting Scenario: "Workstation Isolated with APIPA Address"
+## 2. IP Addressing & Subnet Allocation Plan
 
-### Reported Incident:
-Workstation `PC-FIN01` plugged into switch port `Fa0/5` cannot browse the intranet or reach any shared folders. Running `ipconfig` returns an APIPA address: `169.254.120.44`.
+| Subnet / VLAN | Subnet CIDR | Gateway (Router Subinterface) | DHCP Scope / Management | Description |
+|---------------|-------------|-------------------------------|-------------------------|-------------|
+| **VLAN 10** | `192.168.10.0/24` | `192.168.10.1` (`Gi0/1.10`) | `192.168.10.21` - `.254` (Router DHCP) | Corporate Workstations & Printers (HR, Fin, Ops, IT, Sales, Eng) |
+| **VLAN 20** | `192.168.20.0/24` | `192.168.20.1` (`Gi0/1.20`) | Static (`192.168.20.10` DC/FS/Print) | Corporate Server Farm & Core Infrastructure |
+| **VLAN 99** | `192.168.99.0/24` | `192.168.99.1` (`Gi0/1.99`) | Static (`192.168.99.2` Switch SVI) | Network Management SVI |
+| **WAN / ISP** | `203.0.113.0/30` | `203.0.113.1` (ISP Gateway) | Static (`203.0.113.2` Router Gi0/0) | Primary WAN Uplink |
 
-### Triage Sequence:
-1. **Physical Layer Check:**
-   `show interfaces fastethernet 0/5` $\rightarrow$ Port is `up/up`. Link lights are green.
-2. **VLAN Assignment Check on Switch:**
+---
+
+## 3. Key Architectural Decisions & Corrections
+
+### A. Router-Managed DHCP Architecture
+- **Single Authority:** DHCP addressing for corporate users (VLAN 10) is handled directly by `NEX-RTR01` via DHCP pool `VLAN10_CORP_USERS`.
+- **Conflict Resolution:** Earlier iterations configured both router-managed DHCP and an external DHCP relay (`ip helper-address 192.168.20.10`) on the same subinterface. In accordance with strict network engineering standards, `ip helper-address` has been removed from `Gi0/1.10` to eliminate duplicate DHCP offer races.
+
+### B. Access Control List 101: Correct Direction & Return Traffic Handling
+- **Placement & Direction:** ACL 101 is applied **outbound** on `interface GigabitEthernet0/1.20` (`ip access-group 101 out`).
+- **Why this is technically correct:**
+  - Packets initiated by corporate users in VLAN 10 enter the router on `Gi0/1.10 in` and exit towards the servers on `Gi0/1.20 out`. ACL 101 inspects and permits only approved enterprise services:
+    - SMB / File Sharing: TCP 445
+    - Kerberos Authentication: TCP/UDP 88
+    - Kerberos Password Change: TCP/UDP 464
+    - Active Directory LDAP: TCP/UDP 389
+    - Domain DNS: UDP/TCP 53
+    - ICMP Echo (ping diagnostics)
+  - **Server Response Traffic:** When servers in VLAN 20 respond to client requests, their packets enter `Gi0/1.20 in` (where ACL 101 is NOT applied) and exit `Gi0/1.10 out` (where ACL 101 is NOT applied). This prevents valid return traffic from being blocked by the final `deny ip any any log` rule.
+
+### C. Password Security & Obfuscation Limitations
+- **Type 7 Passwords Removed:** Cisco Type 7 passwords (`service password-encryption`) use a trivially reversible XOR/Vigenère cipher dating to the 1990s and must never be considered true encryption.
+- **Configurable Placeholders:** The running configs utilize standard `login local` and administrative secret placeholders (`<LOCAL_ADMIN_SECRET>`, `<LOCAL_ENABLE_SECRET>`) for safe local operator configuration.
+
+---
+
+## 4. Cisco IOS Configuration Deployment Guide
+
+### Router Configuration (`NEX-RTR01`)
+File: [networking/packet-tracer/nexora-rtr01-running-config.ios](file:///d:/Projects/enterprise-it-service-desk-lab/networking/packet-tracer/nexora-rtr01-running-config.ios)
+
+To apply in Packet Tracer or hardware terminal:
+```cisco
+Router> enable
+Router# configure terminal
+Router(config)# hostname NEX-RTR01
+! Paste contents of nexora-rtr01-running-config.ios
+Router(config)# exit
+Router# copy running-config startup-config
+```
+
+### Switch Configuration (`SW-CORE-01`)
+File: [networking/packet-tracer/nexora-sw01-running-config.ios](file:///d:/Projects/enterprise-it-service-desk-lab/networking/packet-tracer/nexora-sw01-running-config.ios)
+
+To apply in Packet Tracer or hardware terminal:
+```cisco
+Switch> enable
+Switch# configure terminal
+Switch(config)# hostname SW-CORE-01
+! Paste contents of nexora-sw01-running-config.ios
+Switch(config)# exit
+Switch# copy running-config startup-config
+```
+
+---
+
+## 5. Verification & Diagnostic Commands
+
+When running in Cisco Packet Tracer or hardware lab:
+
+1. **Verify 802.1Q Trunking on Switch:**
    ```cisco
-   SW-CORE-01# show mac address-table interface fastethernet 0/5
-             Mac Address Table
-   -------------------------------------------
-   Vlan    Mac Address       Type        Ports
-   ----    -----------       --------    -----
-      1    0050.7966.6802    DYNAMIC     Fa0/5
+   SW-CORE-01# show interfaces trunk
+   ! Expected: Gi0/1 Mode: on, Encapsulation: 802.1q, Status: trunking, Allowed: 10,20,99
    ```
-   **Root Cause Identified:** Port `Fa0/5` was left on the default unconfigured `VLAN 1`, which has no DHCP server, no default gateway, and no routing!
-3. **Corrective Command Sequence:**
+
+2. **Verify PortFast & BPDU Guard on User Access Ports:**
    ```cisco
-   SW-CORE-01# configure terminal
-   SW-CORE-01(config)# interface FastEthernet0/5
-   SW-CORE-01(config-if)# switchport mode access
-   SW-CORE-01(config-if)# switchport access vlan 10
-   SW-CORE-01(config-if)# spanning-tree portfast
-   SW-CORE-01(config-if)# end
-   SW-CORE-01# write memory
+   SW-CORE-01# show spanning-tree interface fa0/1 detail
+   ! Expected: The port is in the portfast mode; BPDU guard is enabled
    ```
-4. **Client-Side Verification:**
-   On `PC-FIN01`, run:
-   ```cmd
-   ipconfig /renew
+
+3. **Verify Sticky MAC Port Security:**
+   ```cisco
+   SW-CORE-01# show port-security interface fa0/1
+   ! Expected: Port Security: Enabled, Violation Mode: Restrict, Max MAC: 2
    ```
-   *Result:* Acquired `192.168.10.22`, Default Gateway `192.168.10.1`, DNS `192.168.20.10`.
-   Ping to `192.168.10.1` and `192.168.20.10` replies in <1ms. Issue resolved.
+
+4. **Verify DHCP Lease Issuance on Router:**
+   ```cisco
+   NEX-RTR01# show ip dhcp binding
+   ! Expected: Active leases in 192.168.10.0/24 subnet for connected workstations
+   ```
+
+5. **Verify ACL 101 Match Counters:**
+   ```cisco
+   NEX-RTR01# show access-lists 101
+   ! Expected: Non-zero match counters for permitted TCP 445, 88, 389, and UDP 53 packets
+   ```
