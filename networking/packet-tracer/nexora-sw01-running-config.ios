@@ -1,0 +1,66 @@
+! Current Configuration - SW-CORE-01 (Cisco Catalyst 2960-24TT Switch)
+! Nexora Technologies - Floor 2 Distribution Switch
+!
+version 15.0
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+!
+hostname SW-CORE-01
+!
+! VLAN Database
+vlan 10
+ name Corp_Users
+!
+vlan 20
+ name Server_Farm
+!
+vlan 99
+ name Management
+!
+! Management Interface
+interface Vlan99
+ description Management SVI
+ ip address 192.168.99.2 255.255.255.0
+ no shutdown
+!
+ip default-gateway 192.168.99.1
+!
+! Trunk Port to Router NEX-RTR01
+interface GigabitEthernet0/1
+ description 802.1Q Trunk Link to Router NEX-RTR01 g0/0/1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,99
+ switchport nonegotiate
+!
+! Access Ports for Corporate User Desktops & Laptops (VLAN 10)
+interface range FastEthernet0/1 - 16
+ description Workstations - VLAN 10 (PortFast Enabled)
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+!
+! Access Ports for Network Printers (VLAN 10)
+interface range FastEthernet0/17 - 18
+ description Network Printers - VLAN 10
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+!
+! Access Ports for Corporate Server Farm (VLAN 20)
+interface range FastEthernet0/19 - 24
+ description Corporate Servers (DC, FS, APP) - VLAN 20
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+!
+line con 0
+ password cisco
+ login
+line vty 0 4
+ password cisco
+ login
+ transport input ssh
+!
+end

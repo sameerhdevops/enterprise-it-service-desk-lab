@@ -1,0 +1,91 @@
+Password for alex.chen@NEXORA.TEST: 
+Warning: Your password will expire in 89 days on Thu Feb 11 13:07:09 2027
+=== DOMAIN CONTROLLER STATUS ===
+Domain and forest function level for domain 'DC=nexora,DC=test'
+
+Forest function level: (Windows) 2008 R2
+Domain function level: (Windows) 2008 R2
+Lowest function level of a DC: (Windows) 2008 R2
+
+=== PASSWORD AND LOCKOUT POLICY ===
+Password information for domain 'DC=nexora,DC=test'
+
+Password complexity: on
+Store plaintext passwords: off
+Password history length: 5
+Minimum password length: 8
+Minimum password age (days): 0
+Maximum password age (days): 90
+Account lockout duration (mins): 15
+Account lockout threshold (attempts): 5
+Reset account lockout after (mins): 15
+
+=== DOMAIN USERS REGISTER ===
+krbtgt
+karthik.subramaniam
+akash.desai
+kavitha.murthy
+priya.sharma
+Guest
+alex.chen
+arun.nair
+suresh.hegde
+prasad.joshi
+rajesh.bhat
+shreya.patil
+Administrator
+deepak.rao
+divya.ramesh
+
+=== IT ADMIN GROUP MEMBERSHIP ===
+priya.sharma
+suresh.hegde
+rajesh.bhat
+alex.chen
+
+=== ALL STAFF GROUP MEMBERSHIP ===
+kavitha.murthy
+prasad.joshi
+deepak.rao
+shreya.patil
+priya.sharma
+akash.desai
+arun.nair
+suresh.hegde
+rajesh.bhat
+karthik.subramaniam
+alex.chen
+divya.ramesh
+
+=== DNS SRV RECORD QUERY (_ldap._tcp.nexora.test) ===
+0 100 389 softwaresamee.nexora.test.
+
+=== KERBEROS TICKET ACQUISITION (alex.chen) ===
+Ticket cache: FILE:/tmp/krb5cc_0
+Default principal: alex.chen@NEXORA.TEST
+
+Valid starting     Expires            Service principal
+11/13/26 13:07:20  11/13/26 23:07:20  krbtgt/NEXORA.TEST@NEXORA.TEST
+	renew until 11/14/26 13:07:20
+
+=== SMB SHARES DISCOVERY ===
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	sysvol          Disk      
+	netlogon        Disk      
+	CompanyShared   Disk      
+	HR-Private      Disk      
+	Finance-Private Disk      
+	IT-Admin        Disk      
+	IPC$            IPC       IPC Service (Samba 4.19.5-Ubuntu)
+SMB1 disabled -- no workgroup available
+
+=== AUTHORIZED SHARE ACCESS TEST (CompanyShared) ===
+  .                                   D        0  Fri Nov 13 12:50:52 2026
+  ..                                  D        0  Fri Nov 13 12:50:52 2026
+
+		1055762868 blocks of size 1024. 994134092 blocks available
+
+=== DENIED ACCESS TEST (Finance User deepak.rao accessing HR-Private) ===
+tree connect failed: NT_STATUS_ACCESS_DENIED

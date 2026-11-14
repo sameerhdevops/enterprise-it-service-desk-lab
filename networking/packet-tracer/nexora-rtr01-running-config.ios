@@ -1,0 +1,99 @@
+! Current Configuration - NEX-RTR01 (Cisco 2911 Integrated Services Router)
+! Nexora Technologies - Bengaluru Headquarters Office Gateway
+!
+version 15.1
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+!
+hostname NEX-RTR01
+!
+boot-start-marker
+boot-end-marker
+!
+! User Access Security
+enable secret 5 $1$mERr$hx5rVt7rPNoS4wqbXKX7m0
+!
+no aaa new-model
+!
+! IP DHCP Pool Configuration
+ip dhcp excluded-address 192.168.10.1 192.168.10.20
+ip dhcp excluded-address 192.168.20.1 192.168.20.20
+!
+ip dhcp pool VLAN10_CORP_USERS
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1 
+ dns-server 192.168.20.10 8.8.8.8 
+ domain-name nexora.local
+ lease 7
+!
+ip dhcp pool VLAN20_SERVERS
+ network 192.168.20.0 255.255.255.0
+ default-router 192.168.20.1 
+ dns-server 192.168.20.10 
+ domain-name nexora.local
+!
+! Interfaces
+! WAN Uplink to ISP
+interface GigabitEthernet0/0/0
+ description WAN Uplink to Primary ISP NOC
+ ip address 203.0.113.2 255.255.255.252
+ ip nat outside
+ duplex auto
+ speed auto
+!
+! Physical Trunk Port to Core Switch SW-CORE-01
+interface GigabitEthernet0/0/1
+ description Trunk Link to SW-CORE-01
+ no ip address
+ duplex auto
+ speed auto
+!
+! Subinterface for VLAN 10 (Corporate User LAN)
+interface GigabitEthernet0/0/1.10
+ description Corporate Users (HR, Finance, Operations, Sales)
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+ ip helper-address 192.168.20.10
+ ip nat inside
+!
+! Subinterface for VLAN 20 (Server Farm & Infrastructure)
+interface GigabitEthernet0/0/1.20
+ description Corporate Server Farm (DC, File, App)
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+ ip access-group 101 in
+ ip nat inside
+!
+! Subinterface for VLAN 99 (Management Network)
+interface GigabitEthernet0/0/1.99
+ description Network Device In-Band Management
+ encapsulation dot1Q 99
+ ip address 192.168.99.1 255.255.255.0
+!
+! Default Route to ISP Gateway
+ip route 0.0.0.0 0.0.0.0 203.0.113.1
+!
+! NAT Overload (PAT) for Internet Access
+ip nat inside source list 1 interface GigabitEthernet0/0/0 overload
+access-list 1 permit 192.168.10.0 0.0.0.255
+access-list 1 permit 192.168.20.0 0.0.0.255
+!
+! Access Control List 101 - Restrict User Access to Server Farm
+access-list 101 remark Permitted Corporate Core Services
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 445
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 88
+access-list 101 permit tcp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 389
+access-list 101 permit udp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 53
+access-list 101 permit icmp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 echo
+access-list 101 deny ip any any log
+!
+line con 0
+ password cisco
+ login
+line vty 0 4
+ password cisco
+ login
+ transport input ssh
+!
+end
