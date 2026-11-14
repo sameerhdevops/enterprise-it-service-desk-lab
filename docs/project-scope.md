@@ -33,17 +33,17 @@ This register provides a clear and honest audit of every component in the reposi
 | 11 | **AGDLP Group Management** | **B & D** (Verified in Lab) | Textbook nesting implemented: Accounts $\rightarrow$ Global Groups (`GG-*`) $\rightarrow$ Domain Local Groups (`DL-*`) $\rightarrow$ Permissions. |
 | 12 | **SMB Share Permissions** | **B** (Deployed & Verified) | Departmental file shares (`CompanyShared`, `HR-Private`, `Finance-Private`, `IT-Admin`) with verified access and access denied blocks. |
 | 13 | **Packet Capture & TShark** | **A & B** (Executed & Verified) | 20-frame loopback `.pcap` capture analyzed via `tshark` CLI with 8 standard display filters (TCP handshake, DNS, ICMP). |
-| 14 | **Cisco IOS Running Configs** | **E** (Reference Drafts) | Syntax-accurate Cisco 2911 router and Catalyst 2960 switch configuration files (`.ios`) for a 2-VLAN office design. |
+| 14 | **Cisco IOS Running Configs** | **E** (Reference Drafts) | Syntax-accurate Cisco 2911 router and Catalyst 2960 switch configuration files (`.ios`) for a 3-VLAN reference design (VLAN 10 Corporate Users, VLAN 20 Server Farm, VLAN 99 Management). |
 | 15 | **Packet Tracer Documentation** | **E** (Reference Documentation) | Office network topology design, subnet planning, and simulation instructions. No compiled `.pkt` binary in repository. |
-| 16 | **Windows Troubleshooting Runbooks** | **E** (Operational SOPs) | 14 Standard Operating Procedures for L1 desktop issues (BSOD triage, printer spooler crashes, high memory, disk cleanup). |
+| 16 | **Windows Troubleshooting Runbooks** | **E** (Operational SOPs) | 15 Standard Operating Procedures for L1 desktop issues (BSOD triage, printer spooler crashes, high memory, disk cleanup, shared folder access). |
 | 17 | **M365 Client Diagnostic Script** | **A** (Executed Locally) | PowerShell script (`scripts/m365-client-diag.ps1`) checking local Office C2R build, Teams cache, OneDrive, and TCP 443 sockets. |
 | 18 | **Microsoft 365 Documentation** | **E** (Support Guides) | End-user support guides for Outlook profile errors, OneDrive sync conflicts, and Teams audio configuration. |
 | 19 | **ITIL v4 Framework Policies** | **E** (Process Documentation) | Practical policies for Incident, Request, Problem, and Change Management, including Escalation Matrix and SLA governance. |
 | 20 | **Incident & Request Datasets** | **D** (Simulated Datasets) | Canonical CSV registers: 20 incidents (P1-P4), 8 service requests, 3 problem records, and 3 change records. |
 | 21 | **Asset Inventory Dataset** | **D** (Simulated Dataset) | 25 hardware and software configuration items (laptops, monitors, printers, servers) tracked with serial numbers and models. |
-| 22 | **Python Reporting Engine** | **A & C** (Implemented & Tested) | `reporting/report-generator.py` calculates MTTR (15.75h), FCR (85%), SLA compliance rate (85%), and summary breakdowns. |
+| 22 | **Python Reporting Engine** | **A & C** (Implemented & Tested) | `reporting/report-generator.py` calculates MTTR (15.75h), L1 Resolution Rate (Non-Escalated: 85.0%, 17 of 20 incidents), resolved-ticket SLA attainment (100.0%, 17 of 17 met), portfolio snapshot attainment (85.0%, 17 of 20 incidents compliant), and summary breakdowns. |
 | 23 | **CSV Dataset Validation** | **A & C** (Implemented & Tested) | `scripts/validate-data.py` validates all 5 CSV registers for schema conformance, unique keys, and chronological dates. |
-| 24 | **Service Desk Test Suite** | **A & C** (Executed & Verified) | `scripts/test_service_desk_platform.py` executes 17 automated test modules covering API, auth, CSRF, XSS, and permissions. |
+| 24 | **Service Desk Test Suite** | **A & C** (Executed & Verified) | `scripts/test_service_desk_platform.py` executes 17 automated test modules covering API authorization, PBKDF2 authentication, Origin/Referer same-origin validation (scheme, hostname, and port), stored XSS mitigation, and database credential migration. |
 | 25 | **Interview & Walkthrough Guide** | **E** (Technical Walkthrough) | `docs/project-walkthrough.md` provides concise technical explanations of all implemented concepts for interview defense. |
 
 ---
@@ -55,3 +55,4 @@ This register provides a clear and honest audit of every component in the reposi
 3. **No Hardware Network Simulation:** Cisco IOS configurations are reference design files; they were not executed on physical Cisco hardware or inside an attached `.pkt` simulator file.
 4. **No Physical Network Packet Capture:** The capture file (`nexora-lab-traffic.pcap`) captures local Linux loopback (`lo`) traffic, not physical corporate LAN cabling.
 5. **Educational Scope:** The custom Python Service Desk application is designed as a learning and demonstration project, not commercial enterprise software.
+6. **Historical Security Disclosure:** Early repository drafts contained static placeholder credentials that have been invalidated locally and replaced with dynamically generated random credentials (`.local_credentials.json` and `.ad_credentials.json`, mode 0600, git-ignored). An automated migration in `init_db()` rotates legacy database password hashes on startup. Because historical Git commits retain early drafts, users should treat all historical commit values as publicly known.

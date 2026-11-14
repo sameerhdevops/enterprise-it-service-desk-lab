@@ -8,7 +8,7 @@ elapsed-clock-hour SLA timers, and integrated Knowledge Base search.
 Zero external dependencies (Python standard library only).
 Security hardened: Localhost binding (127.0.0.1), PBKDF2 authentication,
 dynamic credential bootstrap, role-based authorization, state-machine validation,
-XSS escaping, CSRF verification, dynamic SLA evaluation, customer token protection,
+XSS escaping, Origin/Referer same-origin verification, dynamic SLA evaluation, customer token protection,
 and 10 operational queues.
 """
 
@@ -513,16 +513,16 @@ def seed_tickets(conn):
     base_time = datetime(2024, 11, 10, 9, 0, 0, tzinfo=timezone.utc)
 
     sample_tickets = [
-        ("NEX-101", "Locked out of Windows account after password change", "Password Reset / Account Unlock", "Kavitha Murthy", "kavitha.murthy@nexora.com", "HR", "Medium", "High", "P2", "Resolved", "Alex Chen", "L1 Service Desk", 0.5, "Account unlocked and bad password cache flushed on smartphone."),
-        ("NEX-102", "Outlook fails to connect - stuck on 'Loading Profile'", "Microsoft 365 Client Issue", "Deepak Rao", "deepak.rao@nexora.com", "Finance", "Medium", "Medium", "P3", "Resolved", "Priya Sharma", "L1 Service Desk", 2.0, "Recreated corrupt Outlook profile and rebuilt OST cache."),
-        ("NEX-103", "Finance shared network drive F: inaccessible", "Network Connectivity", "Deepak Rao", "deepak.rao@nexora.com", "Finance", "High", "High", "P1", "Resolved", "Alex Chen", "L1 Service Desk", 1.25, "Verified Kerberos ticket expiry; executed klist purge and refreshed group membership."),
-        ("NEX-104", "GlobalProtect VPN gateway timeout when working remotely", "VPN Issue", "Divya Ramesh", "divya.ramesh@nexora.com", "Engineering", "Medium", "High", "P2", "In Progress", "Suresh Hegde", "L2 Network", 0, "Switched client protocol to TCP/SSL as workaround. Investigating MTU black hole."),
-        ("NEX-105", "Dell 24-inch monitor display flickering intermittently", "Hardware Problem", "Shreya Patil", "shreya.patil@nexora.com", "Sales", "Low", "Low", "P4", "Resolved", "Alex Chen", "L1 Service Desk", 4.5, "Replaced damaged DisplayPort cable with certified OEM cable."),
-        ("NEX-106", "Need Adobe Acrobat Pro installed for contract review", "Software Installation", "Karthik Subramaniam", "karthik.s@nexora.com", "Engineering", "Low", "Medium", "P4", "Waiting for Customer", "Priya Sharma", "L1 Service Desk", 0, "Requested manager approval confirmation from department head."),
-        ("NEX-107", "HR Floor 2 network printer showing 'Offline'", "Printer Issue", "Kavitha Murthy", "kavitha.murthy@nexora.com", "HR", "Medium", "Medium", "P3", "Resolved", "Alex Chen", "L1 Service Desk", 0.75, "Restarted Print Spooler service on print server and cleared hung queue."),
-        ("NEX-108", "Laptop freezing and fan spinning loudly at 100% CPU", "Laptop Performance Issue", "Arun Nair", "arun.nair@nexora.com", "Operations", "Medium", "Medium", "P3", "Resolved", "Priya Sharma", "L1 Service Desk", 1.5, "Terminated runaway Chrome renderer thread and scheduled cold reboot to bypass Fast Startup."),
-        ("NEX-109", "Suspicious phishing email reporting urgent wire transfer", "Security Incident", "Prasad Joshi", "prasad.joshi@nexora.com", "Operations", "High", "High", "P1", "Resolved", "Rajesh Bhat", "IT Security", 0.5, "Purged phishing email tenant-wide via Defender Explorer and blocked sender domain."),
-        ("NEX-110", "New Employee Account Provisioning - Frontend Engineer", "New User Access", "Rajesh Bhat", "rajesh.bhat@nexora.com", "IT", "Low", "High", "P3", "New", "Unassigned", "L1 Service Desk", 0, "New hire onboarding ticket created. Awaiting HR verification.")
+        ("NEX-101", "Locked out of Windows account after password change", "Password Reset / Account Unlock", "Kavitha Murthy", "kavitha.murthy@nexora.test", "HR", "Medium", "High", "P2", "Resolved", "Alex Chen", "L1 Service Desk", 0.5, "Account unlocked and bad password cache flushed on smartphone."),
+        ("NEX-102", "Outlook fails to connect - stuck on 'Loading Profile'", "Microsoft 365 Client Issue", "Deepak Rao", "deepak.rao@nexora.test", "Finance", "Medium", "Medium", "P3", "Resolved", "Priya Sharma", "L1 Service Desk", 2.0, "Recreated corrupt Outlook profile and rebuilt OST cache."),
+        ("NEX-103", "Finance shared network drive F: inaccessible", "Network Connectivity", "Deepak Rao", "deepak.rao@nexora.test", "Finance", "High", "High", "P1", "Resolved", "Alex Chen", "L1 Service Desk", 1.25, "Verified Kerberos ticket expiry; executed klist purge and refreshed group membership."),
+        ("NEX-104", "GlobalProtect VPN gateway timeout when working remotely", "VPN Issue", "Divya Ramesh", "divya.ramesh@nexora.test", "Engineering", "Medium", "High", "P2", "In Progress", "Suresh Hegde", "L2 Network", 0, "Switched client protocol to TCP/SSL as workaround. Investigating MTU black hole."),
+        ("NEX-105", "Dell 24-inch monitor display flickering intermittently", "Hardware Problem", "Shreya Patil", "shreya.patil@nexora.test", "Sales", "Low", "Low", "P4", "Resolved", "Alex Chen", "L1 Service Desk", 4.5, "Replaced damaged DisplayPort cable with certified OEM cable."),
+        ("NEX-106", "Need Adobe Acrobat Pro installed for contract review", "Software Installation", "Karthik Subramaniam", "karthik.s@nexora.test", "Engineering", "Low", "Medium", "P4", "Waiting for Customer", "Priya Sharma", "L1 Service Desk", 0, "Requested manager approval confirmation from department head."),
+        ("NEX-107", "HR Floor 2 network printer showing 'Offline'", "Printer Issue", "Kavitha Murthy", "kavitha.murthy@nexora.test", "HR", "Medium", "Medium", "P3", "Resolved", "Alex Chen", "L1 Service Desk", 0.75, "Restarted Print Spooler service on print server and cleared hung queue."),
+        ("NEX-108", "Laptop freezing and fan spinning loudly at 100% CPU", "Laptop Performance Issue", "Arun Nair", "arun.nair@nexora.test", "Operations", "Medium", "Medium", "P3", "Resolved", "Priya Sharma", "L1 Service Desk", 1.5, "Terminated runaway Chrome renderer thread and scheduled cold reboot to bypass Fast Startup."),
+        ("NEX-109", "Suspicious phishing email reporting urgent wire transfer", "Security Incident", "Prasad Joshi", "prasad.joshi@nexora.test", "Operations", "High", "High", "P1", "Resolved", "Rajesh Bhat", "IT Security", 0.5, "Purged phishing email tenant-wide via Defender Explorer and blocked sender domain."),
+        ("NEX-110", "New Employee Account Provisioning - Frontend Engineer", "New User Access", "Rajesh Bhat", "rajesh.bhat@nexora.test", "IT", "Low", "High", "P3", "New", "Unassigned", "L1 Service Desk", 0, "New hire onboarding ticket created. Awaiting HR verification.")
     ]
 
     for t in sample_tickets:
@@ -1289,7 +1289,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
       <div class="form-row">
         <div class="form-group">
           <label>Email *</label>
-          <input type="email" id="callerEmail" required placeholder="user@nexora.com">
+          <input type="email" id="callerEmail" required placeholder="user@nexora.test">
         </div>
         <div class="form-group">
           <label>Department *</label>

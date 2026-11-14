@@ -14,7 +14,7 @@ Technical choices made for this lab and why. Each decision is driven by what is 
   - Strict lifecycle state machine (New → Assigned → In Progress → Waiting for Customer → Resolved → Closed).
   - 10 operational queues for technician triage.
   - Dual-perspective commenting (public customer updates vs. private agent work notes).
-  - Web security fundamentals: PBKDF2 password hashing, session cookies (`HttpOnly`, `SameSite=Strict`), complete CSRF/Origin validation, and stored XSS defense.
+  - Web security fundamentals: PBKDF2 password hashing, session cookies (`HttpOnly`, `SameSite=Strict`), Origin/Referer same-origin validation (scheme, hostname, and port), and stored XSS defense.
 
 **Why document ServiceNow and Jira SM?**
 

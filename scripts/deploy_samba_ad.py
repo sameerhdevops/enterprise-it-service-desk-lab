@@ -666,7 +666,7 @@ PY_DNS
 
     echo -e "\\n=== DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===" >> "$OUT"
     TARGET_HOST=$(dig @::1 _ldap._tcp.nexora.test SRV +short | awk '{print $4}' | sed 's/\\.$//')
-    dig @::1 "$TARGET_HOST" A +short >> "$OUT" 2>&1
+    dig @::1 "$TARGET_HOST" A +short | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/<REDACTED_WSL_IP>/' >> "$OUT" 2>&1
 
     # Extract credentials for testing from vault directory
     python3 - << 'PY_AUTH_PREP'

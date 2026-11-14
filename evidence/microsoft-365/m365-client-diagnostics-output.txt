@@ -1,7 +1,7 @@
 ﻿======================================================================
   NEXORA TECHNOLOGIES - M365 / OFFICE CLIENT DIAGNOSTIC REPORT
   Scope: Local Client Diagnostics & Endpoint Reachability Verification
-  Executed: 2026-11-14 11.05.08 | Host: NEX-WS01 (Windows 11 Workstation)
+  Execution: [REDACTED_TIMESTAMP] | Host: [CLIENT_WORKSTATION] (Windows 11)
 ======================================================================
 
 [1. Office Click-to-Run Suite Detection]

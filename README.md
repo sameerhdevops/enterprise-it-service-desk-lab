@@ -14,7 +14,7 @@ This repository demonstrates the foundational competencies and operational workf
 - Diagnosing Windows desktop, printing, network, and account access issues.
 - Administering Active Directory user accounts, security groups, and share permissions.
 - Understanding ITIL v4 operational processes (Incident, Request, Problem, Change, and SLA governance).
-- Automating support metric calculations (MTTR, FCR, SLA compliance) and validating dataset integrity.
+- Automating support metric calculations (MTTR, L1 resolution rate, SLA compliance) and validating dataset integrity.
 
 ---
 
@@ -25,11 +25,11 @@ A self-contained web portal and REST API built with the Python standard library 
 - **Customer Portal (`/portal`):** Submit support requests and track real-time progress using a unique ticket key and customer access token.
 - **Agent Console (`/agent`):** Role-based access (Admin, L1 Agent, L2 Support, Read-Only), queue management, status progression, work notes, and customer communication.
 - **Priority & SLA Engine:** Calculates priority from an Impact × Urgency matrix and evaluates continuous 24x7 elapsed-time resolution targets.
-- **Security Controls:** PBKDF2-HMAC-SHA256 password hashing with salt, `HttpOnly` and `SameSite=Strict` cookies, Content Security Policy (CSP), origin validation, and stored-XSS mitigation.
+- **Security Controls:** PBKDF2-HMAC-SHA256 password hashing with salt, `HttpOnly` and `SameSite=Strict` session cookies, Content Security Policy (CSP), Origin/Referer same-origin request validation (checking scheme, hostname, and port), and stored-XSS output escaping.
 
 ### 2. Active Directory Domain Services Lab (`active-directory/`)
 - Isolated **Samba 4 Active Directory Domain Controller** for realm `nexora.test` deployed on Linux/WSL2 via `scripts/deploy_samba_ad.py`.
-- Departmental Organizational Units (OUs), domain users, and textbook **AGDLP** group nesting (`Accounts` $\rightarrow$ `Global Groups` $\rightarrow$ `Domain Local Groups` $\rightarrow$ `Permissions`).
+- Departmental Organizational Units (OUs), domain users, and textbook **AGDLP** group nesting (`Accounts` → `Global Groups` → `Domain Local Groups` → `Permissions`).
 - Kerberos ticket acquisition (`kinit`/`klist`) and verified SMB file share access control (`CompanyShared`, `HR-Private`, `Finance-Private`, `IT-Admin`).
 
 ### 3. Loopback Packet Capture & TShark Protocol Analysis (`evidence/packet-captures/`)
@@ -37,7 +37,7 @@ A self-contained web portal and REST API built with the Python standard library 
 - Forensic protocol inspection using the `tshark` CLI to verify TCP 3-way handshakes (SYN, SYN-ACK, ACK), DNS SRV lookups, DNS NXDOMAIN responses, and HTTP transactions.
 
 ### 4. Metrics Reporting & CSV Validation Engine (`reporting/`, `scripts/`)
-- Python reporting script (`reporting/report-generator.py`) computing Mean Time to Resolve (MTTR: 15.75h), First Contact Resolution (FCR: 85%), and SLA compliance (85%).
+- Python reporting script (`reporting/report-generator.py`) computing Mean Time to Resolve (MTTR: 15.75h), L1 Resolution Rate (Non-Escalated: 85.0%, 17 of 20 incidents), resolved-ticket SLA attainment (100.0%, 17 of 17 met), and portfolio snapshot SLA attainment (85.0%, 17 of 20 incidents compliant, accounting for 3 overdue open tickets).
 - Automated test suite (`reporting/tests/`) verifying report calculations and edge cases.
 - Dataset validator (`scripts/validate-data.py`) verifying schema, chronology, and relational integrity.
 
@@ -48,8 +48,8 @@ A self-contained web portal and REST API built with the Python standard library 
 To maintain complete transparency during technical interviews, several components serve as operational reference guides and learning exercises rather than live cloud vendor deployments:
 
 - **ServiceNow & Jira Service Management:** Field mapping architectures, queue designs, and standard operating procedures (`itsm/servicenow/`, `itsm/jira-service-management/`).
-- **Cisco IOS Configurations:** Syntax-accurate running configuration drafts for Cisco 2911 router and Catalyst 2960 switch implementing a 2-VLAN office design (`networking/packet-tracer/`).
-- **Windows Support Runbooks:** 14 practical Standard Operating Procedures for desktop issues including BSOD triage, print spooler crashes, high CPU/RAM, and network adapter resets (`windows-support/runbooks/`).
+- **Cisco IOS Configurations:** Syntax-accurate running configuration drafts for Cisco 2911 router and Catalyst 2960 switch implementing a 3-VLAN reference design (VLAN 10 Corporate Users, VLAN 20 Server Farm, VLAN 99 Management in `networking/packet-tracer/`).
+- **Windows Support Runbooks:** 15 practical Standard Operating Procedures for desktop issues including BSOD triage, print spooler crashes, high CPU/RAM, and network adapter resets (`windows-support/runbooks/`).
 - **Microsoft 365 Support Guides:** Client-side troubleshooting procedures and a PowerShell diagnostic script (`scripts/m365-client-diag.ps1`) for Office C2R, Teams cache, and OneDrive status (`microsoft-365/`).
 - **Sample Datasets:** Canonical CSV records tracking 20 incidents, 8 service requests, 3 problem investigations, 3 change records, and 25 hardware/software assets (`incidents/`, `asset-management/`).
 
@@ -108,7 +108,7 @@ enterprise-it-service-desk-lab/
 │   └── portal/              # Python Service Desk Web App (Customer & Agent portals)
 ├── active-directory/        # Active Directory guides, user lifecycle, and AGDLP policies
 ├── networking/              # Network fundamentals, troubleshooting, and Cisco IOS configs
-├── windows-support/         # Windows 10/11 troubleshooting guides and 14 support runbooks
+├── windows-support/         # Windows 10/11 troubleshooting guides and 15 support runbooks
 ├── microsoft-365/           # Client-side troubleshooting guides and diagnostic script
 ├── incidents/               # Canonical CSV datasets: incidents, requests, problems, changes
 ├── knowledge-base/          # Standardized KB articles (Windows, Network, M365, User Access)
@@ -128,6 +128,7 @@ enterprise-it-service-desk-lab/
 - **Fictional Enterprise:** Nexora Technologies and all associated ticket records are simulated for practice.
 - **No Live SaaS Subscriptions:** ServiceNow and Jira Service Management materials are operational documentation and architecture guides.
 - **Client-Side M365 Scope:** Microsoft 365 work focuses on desktop endpoint triage and diagnostic scripts, not global tenant administration.
-- **Reference Network Configs:** Cisco IOS running configs are syntax-checked reference drafts; the repository does not include a compiled `.pkt` simulator file.
+- **Reference Network Configs:** Cisco IOS running configs are syntax-checked reference drafts implementing a 3-VLAN design; the repository does not include a compiled `.pkt` simulator file.
 - **Loopback Packet Capture:** The PCAP file captures local Linux loopback traffic (`lo`) generated during lab testing, not a physical corporate switch fabric.
 - **Educational Scope:** The custom Python service desk application is an educational learning project, not commercial enterprise software.
+- **Historical Security Disclosure:** Early development drafts of this repository contained static placeholder credentials. These have been invalidated locally and replaced with dynamically generated random credentials (`.local_credentials.json` and `.ad_credentials.json`, mode 0600, git-ignored). An automated migration in `init_db()` rotates legacy database password hashes on startup. Because Git history retains early commits, all historical commit values should be treated as publicly known and never reused.

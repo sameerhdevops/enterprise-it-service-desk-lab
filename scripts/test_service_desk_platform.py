@@ -224,7 +224,7 @@ def run_tests():
             code, res, _ = http_post(f"{base_url}/api/tickets", {
                 "title": f"Test {imp}-{urg}",
                 "caller_name": "Test User",
-                "caller_email": "test@nexora.com",
+                "caller_email": "test@nexora.test",
                 "department": "Engineering",
                 "impact": imp,
                 "urgency": urg,
@@ -241,7 +241,7 @@ def run_tests():
         code, new_ticket, _ = http_post(f"{base_url}/api/tickets", {
             "title": "VPN gateway authentication timeout on remote laptop",
             "caller_name": "Divya Ramesh",
-            "caller_email": "divya.ramesh@nexora.com",
+            "caller_email": "divya.ramesh@nexora.test",
             "department": "Engineering",
             "request_type": "VPN Issue",
             "impact": "High",
@@ -403,7 +403,7 @@ def run_tests():
         old_tok = secrets.token_urlsafe(24)
         ctrl_cur.execute("""
         INSERT INTO tickets (key, title, request_type, caller_name, caller_email, department, impact, urgency, priority, status, assigned_to, assignment_group, created_at, updated_at, resolved_at, due_at, sla_target_hours, sla_breached, description, resolution_notes, customer_access_token)
-        VALUES ('NEX-CTRL-OLD', 'Core router interface flapping', 'Network', 'Arun Nair', 'arun.nair@nexora.com', 'Operations', 'High', 'High', 'P1', 'Resolved', 'Alex Chen', 'L1 Service Desk', ?, ?, ?, ?, 4.0, 0, 'Controlled old ticket', 'Initial line reset', ?)
+        VALUES ('NEX-CTRL-OLD', 'Core router interface flapping', 'Network', 'Arun Nair', 'arun.nair@nexora.test', 'Operations', 'High', 'High', 'P1', 'Resolved', 'Alex Chen', 'L1 Service Desk', ?, ?, ?, ?, 4.0, 0, 'Controlled old ticket', 'Initial line reset', ?)
         """, (old_created, old_resolved, old_resolved, old_due, old_tok))
 
         # Case B: Controlled Newer Ticket (Created 1h ago, P1 = 4h target, resolved 30m ago at 0.5h elapsed)
@@ -413,7 +413,7 @@ def run_tests():
         new_tok = secrets.token_urlsafe(24)
         ctrl_cur.execute("""
         INSERT INTO tickets (key, title, request_type, caller_name, caller_email, department, impact, urgency, priority, status, assigned_to, assignment_group, created_at, updated_at, resolved_at, due_at, sla_target_hours, sla_breached, description, resolution_notes, customer_access_token)
-        VALUES ('NEX-CTRL-NEW', 'Monitor display blank', 'Hardware', 'Shreya Patil', 'shreya.patil@nexora.com', 'Sales', 'High', 'High', 'P1', 'Resolved', 'Alex Chen', 'L1 Service Desk', ?, ?, ?, ?, 4.0, 0, 'Controlled new ticket', 'Reseated cable', ?)
+        VALUES ('NEX-CTRL-NEW', 'Monitor display blank', 'Hardware', 'Shreya Patil', 'shreya.patil@nexora.test', 'Sales', 'High', 'High', 'P1', 'Resolved', 'Alex Chen', 'L1 Service Desk', ?, ?, ?, ?, 4.0, 0, 'Controlled new ticket', 'Reseated cable', ?)
         """, (new_created, new_resolved, new_resolved, new_due, new_tok))
         ctrl_conn.commit()
         ctrl_conn.close()
@@ -529,7 +529,7 @@ def run_tests():
         code, xss_ticket, _ = http_post(f"{base_url}/api/tickets", {
             "title": f"Network Gateway Fault {malicious_vectors[0]}",
             "caller_name": f"Security Auditor {malicious_vectors[3]}",
-            "caller_email": "auditor@nexora.com",
+            "caller_email": "auditor@nexora.test",
             "department": "IT",
             "description": f"Comprehensive injection payload: {compound_xss}"
         })
@@ -714,7 +714,7 @@ def run_tests():
                 description, resolution_notes, customer_access_token
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                f"NEX-MIG-{i}", f"Legacy Seed Ticket {i}", "Software", "User", "user@nexora.com", "IT",
+                f"NEX-MIG-{i}", f"Legacy Seed Ticket {i}", "Software", "User", "user@nexora.test", "IT",
                 "Medium", "Medium", "P3", "New", "Alex Chen", "L1 Service Desk",
                 "2024-11-01 10:00:00", "2024-11-01 10:00:00", None, "2024-11-04 10:00:00", 72.0, 0,
                 f"Description {i}", "", tok

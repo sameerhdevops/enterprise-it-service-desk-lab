@@ -11,7 +11,7 @@ $output = @()
 $output += "======================================================================"
 $output += "  NEXORA TECHNOLOGIES - M365 / OFFICE CLIENT DIAGNOSTIC REPORT"
 $output += "  Scope: Local Client Diagnostics & Endpoint Reachability Verification"
-$output += "  Executed: $timestamp | Host: NEX-WS01 (Windows 11 Workstation)"
+$output += "  Execution: [REDACTED_TIMESTAMP] | Host: [CLIENT_WORKSTATION] (Windows 11)"
 $output += "======================================================================"
 
 # 1. Office / M365 Click-to-Run Installation State

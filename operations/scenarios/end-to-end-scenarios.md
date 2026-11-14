@@ -155,7 +155,7 @@ This document demonstrates the practical execution of six core IT support operat
      Remove-Item -Path "$env:LOCALAPPDATA\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\*" -Recurse -Force
      ```
 4. **Outlook OST Reconstruction:**
-   - Closed Outlook, navigated to `%LOCALAPPDATA%\Microsoft\Outlook`, renamed corrupt `deepak.rao@nexora.com.ost` to `.old`, and launched Outlook.
+   - Closed Outlook, navigated to `%LOCALAPPDATA%\Microsoft\Outlook`, renamed corrupt `deepak.rao@nexora.test.ost` to `.old`, and launched Outlook.
    - Outlook re-synced the full mailbox cleanly from Exchange Online in under 10 minutes.
 
 ---

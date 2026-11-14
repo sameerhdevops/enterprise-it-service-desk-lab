@@ -59,7 +59,7 @@ divya.ramesh
 0 100 389 dc.nexora.test.
 
 === DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===
-172.24.160.96
+<REDACTED_WSL_IP>
 
 === KERBEROS TICKET ACQUISITION (alex.chen@NEXORA.TEST) ===
 Ticket cache: FILE:/tmp/krb5cc_0

@@ -227,7 +227,7 @@ A major incident is any P1 that affects multiple users or a critical business se
 
 | Metric | What It Measures | Target |
 |--------|-----------------|--------|
-| First Contact Resolution (FCR) | % resolved at L1 without escalation | ≥70% |
+| L1 Resolution Rate (Non-Escalated) | % resolved at L1 without escalation | ≥70% |
 | Mean Time to Resolve (MTTR) | Average resolution time by priority | Within SLA |
 | SLA Compliance | % of tickets resolved within SLA | ≥95% |
 | Reopen Rate | % of tickets reopened after closure | ≤5% |

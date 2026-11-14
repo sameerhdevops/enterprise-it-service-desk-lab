@@ -63,7 +63,7 @@ Standard Operating Procedures (SOPs) and troubleshooting guides for common L1 de
 - Continuous elapsed-time SLA policy with clear priority targets.
 
 ### 7. Reporting & Analytics (`reporting/`)
-- Python reporting engine (`reporting/report-generator.py`) computing key support metrics (Mean Time to Resolve - MTTR, First Contact Resolution, SLA compliance rate, category breakdown).
+- Python reporting engine (`reporting/report-generator.py`) computing key support metrics (Mean Time to Resolve - MTTR, L1 Resolution Rate [Non-Escalated: 85.0%], resolved-ticket SLA attainment [100.0%], portfolio snapshot attainment [85.0%], category breakdown).
 - Automated unit test suite (`reporting/tests/`) verifying mathematical accuracy and edge-case data handling.
 
 ---

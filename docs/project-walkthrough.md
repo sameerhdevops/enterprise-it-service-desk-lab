@@ -23,7 +23,7 @@ Using a consistent fictional organization provides realistic business context fo
 The operational ticketing application is located in `itsm/portal/app.py`. It is a lightweight web server and REST API built entirely using the Python standard library (`http.server`) and SQLite:
 - **Customer Portal (`/portal`):** Allows employees to submit incidents or service requests and track real-time progress using their unique ticket key and customer access token.
 - **Agent Console (`/agent`):** Provides service desk technicians with authenticated queue visibility, ticket assignment, status progression, internal work note logging, customer communications, and resolution documentation.
-- **Security & Integrity:** Implements PBKDF2 password hashing, HTTP-only session cookies with `SameSite=Strict`, Content Security Policy (CSP), complete origin and CSRF validation (scheme, hostname, and port checks), and stored XSS defense.
+- **Security & Integrity:** Implements PBKDF2 password hashing, HTTP-only session cookies with `SameSite=Strict`, Content Security Policy (CSP), Origin/Referer same-origin request validation (checking scheme, hostname, and port), and stored XSS defense.
 
 ---
 
@@ -137,8 +137,10 @@ The capture file (`evidence/packet-captures/nexora-lab-traffic.pcap`) contains 2
 The reporting generator (`reporting/report-generator.py`) processes the canonical incident CSV register and produces key operational metrics:
 - **Total Ticket Volume:** Count of all incidents and requests.
 - **Mean Time to Resolve (MTTR):** Total elapsed resolution hours divided by the number of resolved incidents ($\frac{267.75\text{ h}}{17\text{ tickets}} = 15.75\text{ hours}$).
-- **First Contact Resolution (FCR) Rate:** Percentage of tickets resolved by the L1 Service Desk on first touch without functional escalation ($\frac{17}{20} = 85.0\%$).
-- **SLA Compliance Rate:** Percentage of resolved tickets completed within their designated elapsed target window ($\frac{17}{20} = 85.0\%$).
+- **L1 Resolution Rate (Non-Escalated):** Percentage of sample incidents resolved by the L1 Service Desk without functional escalation to L2/L3 ($\frac{17}{20} = 85.0\%$). This metric measures tickets handled entirely within L1; it does not measure First Contact Resolution (FCR), which requires multi-touch interaction logs.
+- **SLA Attainment:**
+  - **Resolved-Ticket SLA Attainment:** 100.0% (all 17 resolved incidents completed within their target elapsed resolution window).
+  - **Portfolio Snapshot Attainment:** 85.0% ($\frac{17}{20}$ incidents compliant), taking into account the 3 escalated open backlog tickets overdue against target at the snapshot baseline.
 - **Category & Priority Breakdown:** Aggregated volume tables to identify chronic problem areas (e.g., network and printing bottlenecks).
 
 ---
@@ -147,9 +149,10 @@ The reporting generator (`reporting/report-generator.py`) processes the canonica
 To maintain complete integrity during technical interviews:
 - **No Commercial SaaS Deployment:** ServiceNow and Jira Service Management are documented as operational reference guides and field-mapping architectures; no live production SaaS subscriptions are attached.
 - **No Microsoft 365 Tenant Administration:** M365 work is focused on client-side desktop diagnostics (PowerShell inspection of Office C2R, Teams local cache, OneDrive process states, and cloud endpoint TCP 443 socket reachability), not global tenant administration.
-- **No Compiled Cisco Packet Tracer Binary:** Cisco IOS configurations are syntax-checked reference configuration drafts; the project does not include a verified `.pkt` binary simulator file.
+- **No Compiled Cisco Packet Tracer Binary:** Cisco IOS configurations are syntax-checked reference configuration drafts implementing a 3-VLAN design (VLAN 10 Corporate Users, VLAN 20 Server Farm, VLAN 99 Management); the project does not include a verified `.pkt` binary simulator file.
 - **Local Loopback Packet Capture:** The PCAP file captures traffic across the local Linux loopback interface (`lo`), not a physical corporate switch fabric or physical LAN cable.
 - **Learning Lab Scope:** The custom Python service desk application is an educational learning tool and is not intended for commercial production deployment.
+- **Historical Security Disclosure:** Early repository drafts contained static placeholder credentials that have been invalidated locally and replaced with dynamically generated random credentials (`.local_credentials.json` and `.ad_credentials.json`, mode 0600, git-ignored). An automated migration in `init_db()` rotates legacy database password hashes on startup. Because historical Git commits retain early drafts, users should treat all historical commit values as publicly known.
 
 ---
 

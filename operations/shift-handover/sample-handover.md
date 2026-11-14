@@ -8,7 +8,7 @@
 
 ### 1. Shift Metrics Summary
 - Total Tickets Logged During Shift: 6
-- Total Tickets Resolved First-Contact (FCR): 4
+- Total Tickets Resolved at L1 (Non-Escalated): 4
 - Open Tickets in L1 Queue: 2
 - Escalated Tickets (to L2/L3): 1
 - Active SLA Breaches: 0

@@ -247,9 +247,9 @@ def generate_sla_report(incidents):
     lines.extend([
         "STATISTICAL INTERPRETATION & METHODOLOGY:",
         f"  * Resolved Incidents Evaluated:        {total_resolved}",
-        f"  * Resolution SLA on Resolved Tickets:  {res_compliance:.1f}% ({tot_res_met} of {total_resolved} met)",
+        f"  * Resolved-Ticket SLA Attainment:      {res_compliance:.1f}% ({tot_res_met} of {total_resolved} met)",
         f"  * Active Backlog Breaches at Snapshot: {tot_opn_brk} of {tot_all - total_resolved} overdue (> target SLA elapsed)",
-        f"  * Overall Sample SLA Compliance Rate:  {overall_pct:.1f}% ({tot_res_met} of {tot_all} sample incidents compliant)",
+        f"  * Portfolio Snapshot Attainment:       {overall_pct:.1f}% ({tot_res_met} of {tot_all} incidents compliant)",
         "  * Policy Basis: Elapsed clock hours (P1: 4h, P2: 8h, P3: 72h, P4: 120h continuous)",
         "=" * 75
     ])
@@ -338,7 +338,7 @@ def generate_weekly_mis(incidents, service_requests=None):
         f"  Total Service Requests:            {total_sr}",
         f"  Total Elapsed Resolution Hours:    {total_res_hours:.2f} hours",
         f"  Mean Time to Resolve (MTTR):       {avg_res_time:.2f} hours (Over {len(res_times)} resolved incidents)",
-        f"  L1 Resolution Rate (Non-Escalated):{l1_res_rate:.1f}% ({l1_resolved_count} resolved at L1 without escalation)",
+        f"  L1 Resolution Rate (Non-Escalated):{l1_res_rate:.1f}% ({l1_resolved_count} of {total_inc} incidents resolved at L1 without escalation)",
         f"  Total Escalated to L2/L3:          {escalated_count} ({(escalated_count/total_inc*100 if total_inc else 0.0):.1f}%)",
         "-" * 75,
         "INCIDENTS BY ASSIGNMENT GROUP:",

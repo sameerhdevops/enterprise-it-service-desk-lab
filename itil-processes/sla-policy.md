@@ -181,7 +181,7 @@ The SLA does not apply in the following situations:
 - Breached tickets with root cause of breach
 - Trend analysis (month-over-month)
 - Top 5 incident categories
-- First contact resolution rate
+- L1 resolution rate (non-escalated)
 - Mean time to resolve by priority
 - Service request fulfilment compliance
 

@@ -182,7 +182,7 @@ Every ticket should pass this quality check:
 | Metric | How It's Calculated | What It Tells You |
 |--------|--------------------|--------------------|
 | Average time in New | Mean time from creation to Assigned | Queue backlog / staffing adequacy |
-| First Contact Resolution | Tickets that went New → Assigned → In Progress → Resolved without reassignment | L1 effectiveness |
+| L1 Resolution Rate (Non-Escalated) | Tickets that went New → Assigned → In Progress → Resolved without reassignment to L2/L3 | L1 effectiveness |
 | Reopen rate | % of tickets that went Resolved → In Progress | Fix quality |
 | Pending time ratio | Time in Pending / total ticket age | Are we waiting too much on others? |
 | Mean Time to Resolve | Time from New to Resolved (minus Pending time) | Actual work efficiency |

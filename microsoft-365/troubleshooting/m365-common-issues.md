@@ -82,7 +82,7 @@
 ---
 
 ## Issue 9: Shared Mailbox Not Appearing in Outlook
-- **Symptom:** User granted access to `invoices@nexora.com`, but it does not show in the left-hand folder pane.
+- **Symptom:** User granted access to `invoices@nexora.test`, but it does not show in the left-hand folder pane.
 - **Resolution:**
   - In Exchange Online, auto-mapping takes up to 60 minutes to propagate.
   - Manual add: File > Account Settings > Account Settings > select user account > Change > More Settings > **Advanced** tab > click **Add...** > type mailbox name > OK.

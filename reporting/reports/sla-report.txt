@@ -19,8 +19,8 @@ OVERALL             20     17        0           3                  85.0%
 ===========================================================================
 STATISTICAL INTERPRETATION & METHODOLOGY:
   * Resolved Incidents Evaluated:        17
-  * Resolution SLA on Resolved Tickets:  100.0% (17 of 17 met)
+  * Resolved-Ticket SLA Attainment:      100.0% (17 of 17 met)
   * Active Backlog Breaches at Snapshot: 3 of 3 overdue (> target SLA elapsed)
-  * Overall Sample SLA Compliance Rate:  85.0% (17 of 20 sample incidents compliant)
+  * Portfolio Snapshot Attainment:       85.0% (17 of 20 incidents compliant)
   * Policy Basis: Elapsed clock hours (P1: 4h, P2: 8h, P3: 72h, P4: 120h continuous)
 ===========================================================================

@@ -15,7 +15,7 @@
 
 ### 1. Shift Metrics Summary
 - Total Tickets Logged During Shift: `[Count]`
-- Total Tickets Resolved First-Contact (FCR): `[Count]`
+- Total Tickets Resolved at L1 (Non-Escalated): `[Count]`
 - Open Tickets in L1 Queue: `[Count]`
 - Escalated Tickets (to L2/L3): `[Count]`
 - Active SLA Breaches: `[Count]`

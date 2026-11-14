@@ -10,7 +10,7 @@
 | Group Type | Purpose & Scope | Can Assign Permissions? | Example |
 |---|---|---|---|
 | **Security Group** | Used to assign access rights to network resources (shared folders, printers, VPN, SharePoint). Can also be used as an email distribution list if mail-enabled. | **YES** (Listed in NTFS and Share Access Control Lists / ACLs). | `FIN-SharedDrive-RW`, `VPN-RemoteUsers`, `IT-Admins` |
-| **Distribution Group** | Used exclusively for broadcasting emails to multiple recipients via Microsoft Exchange / Exchange Online. | **NO** (Cannot be added to NTFS ACLs or file permissions). | `All-Employees@nexora.com`, `HR-Announcements@nexora.com` |
+| **Distribution Group** | Used exclusively for broadcasting emails to multiple recipients via Microsoft Exchange / Exchange Online. | **NO** (Cannot be added to NTFS ACLs or file permissions). | `All-Employees@nexora.test`, `HR-Announcements@nexora.test` |
 
 ---
 

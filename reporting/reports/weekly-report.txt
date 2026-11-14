@@ -8,7 +8,7 @@
    NEXORA TECHNOLOGIES - IT SERVICE DESK MIS REPORT
    Reporting Period: November 1–19, 2024 (Simulated Historical Sample)
    Snapshot Baseline: 2024-11-19 12:00:00 IST
-   Generated At: 2026-11-14 21:27:50 IST
+   Generated At: 2026-11-14 21:50:03 IST
 ===========================================================================
 EXECUTIVE SUMMARY:
   Total IT Interactions Logged:      28
@@ -16,7 +16,7 @@ EXECUTIVE SUMMARY:
   Total Service Requests:            8
   Total Elapsed Resolution Hours:    267.75 hours
   Mean Time to Resolve (MTTR):       15.75 hours (Over 17 resolved incidents)
-  L1 Resolution Rate (Non-Escalated):85.0% (17 resolved at L1 without escalation)
+  L1 Resolution Rate (Non-Escalated):85.0% (17 of 20 incidents resolved at L1 without escalation)
   Total Escalated to L2/L3:          3 (15.0%)
 ---------------------------------------------------------------------------
 INCIDENTS BY ASSIGNMENT GROUP:
