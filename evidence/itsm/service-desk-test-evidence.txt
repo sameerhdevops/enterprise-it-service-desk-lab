@@ -1,12 +1,40 @@
-=== NEXORA IT SERVICE DESK PLATFORM - TEST EXECUTION EVIDENCE ===
-Executed: 2026-11-14 08:15:12
-Total Database Tickets: 13
-Operational Queues Verified: Unassigned, P1 Critical, P2 High, Assigned to L1, Waiting for Customer, Resolved
-SLA Targets Verified: P1 (4h), P2 (8h), P3 (72h), P4 (120h) Elapsed Clock Hours
-Lifecycle Transitions Tested: New -> Assigned -> In Progress -> Waiting for Customer -> Resolved -> Closed
-Active Tickets Sample:
-  [NEX-101] Locked out of Windows account after password change | Priority: P2 | Status: Resolved | Caller: Kavitha Murthy
-  [NEX-102] Outlook fails to connect - stuck on 'Loading Profile' | Priority: P3 | Status: Resolved | Caller: Deepak Rao
-  [NEX-103] Finance shared network drive F: inaccessible | Priority: P1 | Status: Resolved | Caller: Deepak Rao
-  [NEX-104] GlobalProtect VPN gateway timeout when working remotely | Priority: P2 | Status: In Progress | Caller: Divya Ramesh
-  [NEX-105] Dell 24-inch monitor display flickering intermittently | Priority: P4 | Status: Resolved | Caller: Shreya Patil
+[INIT] Server running on 127.0.0.1:8089 using isolated DB: C:\Users\sameer\AppData\Local\Temp\tmpoqhmyqoc\test_servicedesk.db
+[TEST 1] Pre-loaded Ticket Register Check: 10 seed tickets verified. [PASS]
+[TEST 2] Input Validation (Missing Mandatory Fields Rejected with HTTP 400): [PASS]
+[TEST 3] Priority Calculation & Dynamic SLA Target Verification:
+  - Impact: High   | Urgency: High   -> Priority: P1 (Target: 4.0h) [PASS]
+  - Impact: High   | Urgency: Medium -> Priority: P2 (Target: 8.0h) [PASS]
+  - Impact: Medium | Urgency: High   -> Priority: P2 (Target: 8.0h) [PASS]
+  - Impact: Medium | Urgency: Medium -> Priority: P3 (Target: 72.0h) [PASS]
+  - Impact: Low    | Urgency: Low    -> Priority: P4 (Target: 120.0h) [PASS]
+
+[TEST 4] Created Managed Incident NEX-16: Priority P1, SLA Target 4.0h. [PASS]
+[TEST 5] Authorization Gate: Unauthenticated mutation correctly rejected with HTTP 401. [PASS]
+[TEST 6] Authentication Gate: Validated PBKDF2 hash, issued session token (cb4fac95...). [PASS]
+[TEST 7] State Machine Enforcement: Illegal transition 'New' -> 'Closed' blocked with HTTP 400. [PASS]
+[TEST 8] Sequential State Machine Progression:
+  -> State: Assigned               [OK]
+  -> State: In Progress            [OK]
+  -> State: Waiting for Customer   [OK]
+  -> State: In Progress            [OK]
+[TEST 9] Resolution Enforcement: Mandatory resolution notes validated. [PASS]
+  -> State: Resolved with verified technical resolution notes. [OK]
+  -> State: Closed after user confirmation. [OK]
+[TEST 10] Comment Segregation: Internal work notes protected from public exposure. [PASS]
+[TEST 11] Stored XSS Defense: Malicious payloads handled safely. [PASS]
+[TEST 12] 10 Operational Queues Verification:
+  - Queue 'all           ': 17 tickets retrieved [PASS]
+  - Queue 'unassigned    ': 7 tickets retrieved [PASS]
+  - Queue 'assigned_me   ': 5 tickets retrieved [PASS]
+  - Queue 'p1            ': 3 tickets retrieved [PASS]
+  - Queue 'p2            ': 4 tickets retrieved [PASS]
+  - Queue 'wait_customer ': 1 tickets retrieved [PASS]
+  - Queue 'wait_vendor   ': 0 tickets retrieved [PASS]
+  - Queue 'sla_risk      ': 0 tickets retrieved [PASS]
+  - Queue 'sla_breached  ': 3 tickets retrieved [PASS]
+  - Queue 'resolved      ': 8 tickets retrieved [PASS]
+[TEST 13] Export API: Exported 17 ticket records with full SLA metadata. [PASS]
+
+======================================================================
+ALL 13 TEST MODULES PASSED WITH 100% SUCCESS (0 FAILURES, 0 RETRIES)
+======================================================================

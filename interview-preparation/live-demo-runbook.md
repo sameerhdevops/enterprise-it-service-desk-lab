@@ -63,12 +63,17 @@ Demonstrate real domain administration inside WSL2 Ubuntu:
    ```bash
    wsl -u root -d Ubuntu -e samba-tool user list
    ```
-4. Demonstrate Kerberos ticket acquisition:
+4. Demonstrate Textbook AGDLP Group Nesting:
    ```bash
-   wsl -u root -d Ubuntu -e bash -c "echo 'NexoraUser@2026!' | kinit alex.chen@NEXORA.TEST && klist"
+   wsl -u root -d Ubuntu -e samba-tool group listmembers DL-HR-Private-RW
+   ```
+   *Point out:* Shows Domain Local resource group `DL-HR-Private-RW` containing Global group `GG-HR` (textbook AGDLP nesting).
+5. Demonstrate Kerberos ticket acquisition:
+   ```bash
+   wsl -u root -d Ubuntu -e bash -c "kinit alex.chen@NEXORA.TEST && klist"
    ```
    *Point out:* Principal `alex.chen@NEXORA.TEST`, Service Principal `krbtgt/NEXORA.TEST@NEXORA.TEST`.
-5. Demonstrate Access Control on SMB Shares:
+6. Demonstrate Access Control on SMB Shares:
    - Authorized user `alex.chen` lists `//localhost/CompanyShared` $\rightarrow$ Access Granted.
    - Unauthorized user `deepak.rao` attempts `//localhost/HR-Private` $\rightarrow$ `NT_STATUS_ACCESS_DENIED`.
 

@@ -1,5 +1,3 @@
-Password for alex.chen@NEXORA.TEST: 
-Warning: Your password will expire in 89 days on Thu Feb 11 13:07:09 2027
 === DOMAIN CONTROLLER STATUS ===
 Domain and forest function level for domain 'DC=nexora,DC=test'
 
@@ -37,13 +35,13 @@ Administrator
 deepak.rao
 divya.ramesh
 
-=== IT ADMIN GROUP MEMBERSHIP ===
-priya.sharma
-suresh.hegde
-rajesh.bhat
-alex.chen
+=== AGDLP GLOBAL GROUP MEMBERSHIP (GG-HR) ===
+kavitha.murthy
 
-=== ALL STAFF GROUP MEMBERSHIP ===
+=== AGDLP DOMAIN LOCAL GROUP MEMBERSHIP (DL-HR-Private-RW) ===
+GG-HR
+
+=== ALL STAFF GLOBAL GROUP MEMBERSHIP (GG-All-Staff) ===
 kavitha.murthy
 prasad.joshi
 deepak.rao
@@ -57,21 +55,18 @@ karthik.subramaniam
 alex.chen
 divya.ramesh
 
-=== DNS SRV RECORD QUERY (_ldap._tcp.nexora.test) ===
+=== DNS SRV RECORD RESOLUTION (_ldap._tcp.nexora.test) ===
 0 100 389 softwaresamee.nexora.test.
 
-=== KERBEROS TICKET ACQUISITION (alex.chen) ===
+=== KERBEROS TICKET ACQUISITION (alex.chen@NEXORA.TEST) ===
 Ticket cache: FILE:/tmp/krb5cc_0
 Default principal: alex.chen@NEXORA.TEST
 
 Valid starting     Expires            Service principal
-11/13/26 13:07:20  11/13/26 23:07:20  krbtgt/NEXORA.TEST@NEXORA.TEST
-	renew until 11/14/26 13:07:20
+11/14/26 04:04:57  11/14/26 14:04:57  krbtgt/NEXORA.TEST@NEXORA.TEST
+	renew until 11/15/26 04:04:57
 
 === SMB SHARES DISCOVERY ===
-
-	Sharename       Type      Comment
-	---------       ----      -------
 	sysvol          Disk      
 	netlogon        Disk      
 	CompanyShared   Disk      
@@ -79,13 +74,12 @@ Valid starting     Expires            Service principal
 	Finance-Private Disk      
 	IT-Admin        Disk      
 	IPC$            IPC       IPC Service (Samba 4.19.5-Ubuntu)
-SMB1 disabled -- no workgroup available
 
-=== AUTHORIZED SHARE ACCESS TEST (CompanyShared) ===
+=== AUTHORIZED SHARE ACCESS TEST (alex.chen -> CompanyShared) ===
   .                                   D        0  Fri Nov 13 12:50:52 2026
   ..                                  D        0  Fri Nov 13 12:50:52 2026
 
-		1055762868 blocks of size 1024. 994134092 blocks available
+		1055762868 blocks of size 1024. 993955260 blocks available
 
-=== DENIED ACCESS TEST (Finance User deepak.rao accessing HR-Private) ===
+=== DENIED ACCESS TEST (Finance User deepak.rao -> HR-Private) ===
 tree connect failed: NT_STATUS_ACCESS_DENIED

@@ -27,11 +27,11 @@ Gi0/1       10,20,99
 ```cisco
 NEX-RTR01# show ip interface brief
 Interface                  IP-Address      OK? Method Status                Protocol
-GigabitEthernet0/0/0       203.0.113.2     YES manual up                    up      
-GigabitEthernet0/0/1       unassigned      YES unset  up                    up      
-GigabitEthernet0/0/1.10    192.168.10.1    YES manual up                    up      
-GigabitEthernet0/0/1.20    192.168.20.1    YES manual up                    up      
-GigabitEthernet0/0/1.99    192.168.99.1    YES manual up                    up      
+GigabitEthernet0/0         203.0.113.2     YES manual up                    up      
+GigabitEthernet0/1         unassigned      YES unset  up                    up      
+GigabitEthernet0/1.10      192.168.10.1    YES manual up                    up      
+GigabitEthernet0/1.20      192.168.20.1    YES manual up                    up      
+GigabitEthernet0/1.99      192.168.99.1    YES manual up                    up      
 ```
 *Interpretation:* All three 802.1Q subinterfaces are UP/UP and bound to their respective default gateway IP addresses.
 

@@ -26,14 +26,14 @@ See [docs/support-model.md](docs/support-model.md) for the full org structure an
 
 | Module | What It Covers |
 |--------|---------------|
-| **itsm/portal/** | **Operational Service Desk Platform** — Native interactive web application (`app.py`, Python stdlib + SQLite): Customer Portal, L1 Operator Console, 7 queues, Impact x Urgency priority matrix, SLA clock tracker, activity audit trail |
-| **itsm/** | ITSM platform configuration — ServiceNow (PDI) and Jira Service Management setup, ticket workflows, SLA definitions |
+| **itsm/portal/** | **Operational Service Desk Platform** — Native interactive web application (`app.py`, Python stdlib + SQLite): Customer Portal, L1 Operator Console, 10 operational queues, PBKDF2 authentication, Impact x Urgency priority matrix, dynamic SLA clock tracking, stored XSS defense |
+| **itsm/** | ITSM platform architecture & comparison blueprints — ServiceNow (PDI) and Jira Service Management setup, ticket workflows, SLA definitions (SaaS deployment Out of Final Scope) |
 | **incidents/** | Simulated incident scenarios with full lifecycle documentation: logging, categorization, troubleshooting, resolution |
 | **knowledge-base/** | KB articles written for common issues: password resets, VPN, printer problems, M365 troubleshooting |
-| **active-directory/** | Active Directory architecture, OUs, AGDLP security groups, and automated Samba 4 AD DC deployment script (`scripts/deploy_samba_ad.py`) |
+| **active-directory/** | Active Directory architecture, OUs, textbook AGDLP group nesting (`GG-*` -> `DL-*`), and non-destructive Samba 4 AD DC deployment script (`scripts/deploy_samba_ad.py`) |
 | **networking/** | Network fundamentals: Cisco Packet Tracer running configs (`rtr01`, `sw01`), VLANs, 802.1Q subinterfaces, DHCP pools, NAT, lab guide |
 | **windows-support/** | Windows 11 troubleshooting: Fast Startup vs memory leaks, Event Viewer (ID 4740), Print Spooler, remote support, runbooks |
-| **microsoft-365/** | M365 client diagnostics (`scripts/m365-client-diag.ps1`), Click-to-Run builds, Teams LocalCache, cloud endpoint latency, runbooks |
+| **microsoft-365/** | M365 client diagnostics (`scripts/m365-client-diag.ps1`), Click-to-Run builds, Teams LocalCache, measured TCP 443 connect latency, runbooks |
 | **asset-management/** | Hardware/software inventory tracking using CSV-based records |
 | **operations/** | Operational procedures: 6 end-to-end support scenarios, shift handover templates, daily checklists, escalation procedures |
 | **reporting/** | Python scripts (stdlib only) for generating reports from incident and asset data |
@@ -41,20 +41,20 @@ See [docs/support-model.md](docs/support-model.md) for the full org structure an
 | **itil-processes/** | ITIL v4 foundations applied: incident management, problem management, change management, SLA management |
 | **interview-preparation/** | Study notes, 12-minute live interview demonstration runbook (`live-demo-runbook.md`), and scenario practice |
 | **career-assets/** | Interview-ready portfolio descriptions: Resume bullets, Naukri/LinkedIn copy, 60s/3m pitches (`portfolio-descriptions.md`) |
-| **evidence/** | Verified command outputs, Wireshark `.pcap` capture & packet analysis, Samba AD DC verification logs, M365 diagnostics |
+| **evidence/** | Verified command outputs, clean Wireshark `.pcap` capture & TShark analysis, Samba AD DC verification logs, M365 diagnostics |
 | **scripts/** | Administration, deployment, testing, and packet capture utility scripts |
 
 ## Tech Stack
 
-| Tool | Purpose | Why This One |
-|------|---------|-------------|
-| **ServiceNow PDI** | Primary ITSM platform | Industry standard; free Personal Developer Instance |
-| **Jira Service Management** | Secondary ITSM platform | Widely used; free tier available |
-| **Cisco Packet Tracer** | Network simulation | Standard for learning networking; free |
-| **Python 3.14** | Reporting scripts | Stdlib only — no dependencies to manage |
-| **PowerShell 5.1** | Windows automation & admin | Built into Windows, essential for IT support |
-| **Git** | Version control | Track everything, show progression |
-| **Windows 11** | Primary OS / lab environment | What most offices actually run |
+| Tool / Technology | Purpose in Portfolio | Technical Classification | Why This One |
+|---|---|---|---|
+| **Nexora IT Service Desk** | Primary ITSM Platform | **DEPLOYED & VERIFIED** | Self-hosted Python HTTP + SQLite application with real queues, PBKDF2 auth, and dynamic SLA timers |
+| **Samba 4 Active Directory** | Directory & Identity | **DEPLOYED & VERIFIED** | Runs in WSL2 Ubuntu; real Kerberos KDC, DNS SRV resolution, AGDLP nesting, and SMB share controls |
+| **Wireshark & TShark** | Packet Capture & Analysis | **DEPLOYED & VERIFIED** | Clean loopback trace analyzed via `tshark 4.2.2` verifying ICMP, DNS SRV/NXDOMAIN, and TCP 3-way handshake |
+| **PowerShell 5.1 / 7+** | Windows 11 Diagnostics | **DEPLOYED & VERIFIED** | Native Windows automation for Event Viewer ID 4740, Uptime/Fast Startup, and M365 endpoint TCP socket latency |
+| **Python 3.12+ (stdlib)** | MIS Reporting & Portal | **IMPLEMENTED & VERIFIED** | Zero-dependency reporting engine and web portal; 13/13 passing unit tests |
+| **Cisco Packet Tracer** | Network Simulation | **IMPLEMENTED & VERIFIED** | Realistic Cisco 2911 router and Catalyst 2960 switch running configurations for 802.1Q inter-VLAN routing |
+| **ServiceNow & Jira Blueprints**| Enterprise ITSM Comparison | **DOCUMENTED / REFERENCE** | Complete field dictionaries and workflows; external SaaS provisioning is Out of Final Scope |
 
 See [docs/design-decisions.md](docs/design-decisions.md) for the reasoning behind each choice.
 
@@ -102,10 +102,11 @@ This lab runs on a single Windows 11 Enterprise machine (HP 348 G7, Intel Core i
 ## Implementation Status & Defensibility
 
 To ensure 100% transparency during technical interviews, all modules follow standardized status classifications:
-- **DEPLOYED & VERIFIED:** Fully deployed, executed, and tested with real artifacts saved in `evidence/` (Samba 4 AD DC with Kerberos and DNS, native Wireshark `.pcap` capture, operational Python Service Desk web platform, host M365 diagnostic scripts).
+- **DEPLOYED & VERIFIED:** Fully deployed, executed, and tested with real artifacts saved in `evidence/` (Samba 4 AD DC with Kerberos and DNS, native clean Wireshark `.pcap` capture with TShark filter verification, operational Python Service Desk web platform with 10 queues and PBKDF2 auth, host M365 diagnostic scripts with measured TCP connect latencies).
 - **IMPLEMENTED & VERIFIED:** Actually configured, executed, and validated locally (Python reporting engine, 13/13 passing unit tests, dataset validators, Cisco Packet Tracer router/switch running configs).
 - **SIMULATED & VERIFIED:** Modeled through realistic datasets (20 incidents, 8 service requests, 3 problems, 3 changes, 25 assets) with 0 validation errors.
-- **DOCUMENTED:** Standard operating procedures, enterprise runbooks, and ITIL practices fully authored and interview-defensible.
+- **DOCUMENTED / REFERENCE:** Standard operating procedures, enterprise runbooks, and ITIL practices fully authored and interview-defensible.
+- **OUT OF FINAL SCOPE:** External vendor SaaS instances (ServiceNow PDI, Jira Cloud) and tenant-level M365 administration requiring commercial cloud subscriptions; verified zero-cost local alternatives deployed and demonstrated instead.
 
 See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [docs/implementation-status.md](docs/implementation-status.md) for the comprehensive compliance matrix.
 

@@ -1,32 +1,32 @@
 ﻿======================================================================
-  NEXORA TECHNOLOGIES - MICROSOFT 365 CLIENT DIAGNOSTIC REPORT
-  Executed: 2026-11-13 21.23.29
+  NEXORA TECHNOLOGIES - M365 / OFFICE CLIENT DIAGNOSTIC REPORT
+  Scope: Local Client Diagnostics & Endpoint Reachability Verification
+  Executed: 2026-11-14 09.41.56 | Host: SOFTWARESAMEE
 ======================================================================
 
-[1. Office Click-to-Run & Suite Detection]
-  Status: Installed (Click-to-Run)
-  VersionToReport: 16.0.19127.20936
-  ProductReleaseIDs: ProPlus2019Retail,ProPlus2019Volume
-  UpdateChannel: http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60
+[1. Office Click-to-Run Suite Detection]
+  Installation State: INSTALLED (Click-to-Run)
+  VersionToReport:    16.0.19127.20936
+  ProductReleaseIDs:  ProPlus2019Retail,ProPlus2019Volume
+  UpdateChannel:      http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60
 
-[2. Outlook Profile Status & Registry Detection]
-  Outlook Profiles: Default profile uninitialized or managed via cloud identity.
+[2. Outlook Profile & Configuration State]
+  Profile State:      NOT INITIALIZED (No Outlook 16.0 registry profile configured for user)
 
-[3. Microsoft Teams Client & Cache Inspection]
-  Teams Process: Stopped (Idle)
-  New Teams LocalCache Path: C:\Users\sameer\AppData\Local\Packages\MSTeams_8wekyb3d8bbwe\LocalCache (Exists: True)
-  Classic Teams Cache Path:  C:\Users\sameer\AppData\Roaming\Microsoft\Teams (Exists: False)
+[3. Microsoft Teams Process & Local Cache State]
+  Process State:      STOPPED / IDLE
+  New Teams LocalCache: PRESENT (C:\Users\sameer\AppData\Local\Packages\MSTeams_8wekyb3d8bbwe\LocalCache)
+  Classic Teams Cache:  ABSENT
 
-[4. Microsoft OneDrive Sync Client Health]
-  OneDrive Client: Running (PID: 3760)
-  Local OneDrive Directory: C:\Users\sameer\OneDrive (Exists: True)
+[4. Microsoft OneDrive Process & Sync Directory State]
+  Process State:      RUNNING (PID: 3760)
+  Local Sync Path:    PRESENT (C:\Users\sameer\OneDrive)
 
-[5. Microsoft 365 Cloud Endpoint Connectivity (Port 443)]
-  Endpoint: login.microsoftonline.com    | Port: 443 | Status: SUCCESS (Reachable) | RTT: ms
-  Endpoint: outlook.office.com           | Port: 443 | Status: SUCCESS (Reachable) | RTT: ms
-  Endpoint: teams.microsoft.com          | Port: 443 | Status: SUCCESS (Reachable) | RTT: ms
+[5. Microsoft 365 Cloud Endpoint TCP Socket Reachability (Port 443)]
+  Endpoint: login.microsoftonline.com    | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 143.3 ms
+  Endpoint: outlook.office.com           | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 84.7 ms
+  Endpoint: teams.microsoft.com          | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: 128.6 ms
 
 ======================================================================
-  END OF M365 CLIENT DIAGNOSTIC REPORT
+  END OF M365 CLIENT DIAGNOSTIC REPORT (CLIENT-SIDE VERIFIED)
 ======================================================================
-

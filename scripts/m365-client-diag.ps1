@@ -1,83 +1,109 @@
-# Nexora Technologies - Microsoft 365 Client Diagnostics & Endpoint Verification
+# Nexora Technologies - Microsoft 365 / Office Client Diagnostics and Troubleshooting
 # Document ID: M365-DIAG-001
 # Host: Windows 11 Enterprise | L1 Service Desk Diagnostic Script
+# Scope: Local Office Client Installation, Profiles, Process State, Local Cache & TCP 443 Reachability
+# Note: Client-side diagnostics only (Does not assert tenant-level administration)
 
 $ErrorActionPreference = "SilentlyContinue"
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 $output = @()
 
 $output += "======================================================================"
-$output += "  NEXORA TECHNOLOGIES - MICROSOFT 365 CLIENT DIAGNOSTIC REPORT"
-$output += "  Executed: $timestamp"
+$output += "  NEXORA TECHNOLOGIES - M365 / OFFICE CLIENT DIAGNOSTIC REPORT"
+$output += "  Scope: Local Client Diagnostics & Endpoint Reachability Verification"
+$output += "  Executed: $timestamp | Host: $env:COMPUTERNAME"
 $output += "======================================================================"
 
-# 1. Office / M365 Click-to-Run Installation
-$output += "`n[1. Office Click-to-Run & Suite Detection]"
+# 1. Office / M365 Click-to-Run Installation State
+$output += "`n[1. Office Click-to-Run Suite Detection]"
 $c2r = Get-ItemProperty "HKLM:\Software\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue
-if ($c2r) {
-    $output += "  Status: Installed (Click-to-Run)"
-    $output += "  VersionToReport: $($c2r.VersionToReport)"
-    $output += "  ProductReleaseIDs: $($c2r.ProductReleaseIDs)"
-    $output += "  UpdateChannel: $($c2r.UpdateChannel)"
+if ($c2r -and $c2r.VersionToReport) {
+    $output += "  Installation State: INSTALLED (Click-to-Run)"
+    $output += "  VersionToReport:    $($c2r.VersionToReport)"
+    $output += "  ProductReleaseIDs:  $($c2r.ProductReleaseIDs)"
+    $output += "  UpdateChannel:      $($c2r.UpdateChannel)"
 } else {
-    $output += "  Status: Checking standard Office installation..."
-    $officeApp = Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" | Where-Object { $_.DisplayName -like "*Microsoft Office*" -or $_.DisplayName -like "*Microsoft 365*" } | Select-Object -First 1
+    $officeApp = Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*Microsoft Office*" -or $_.DisplayName -like "*Microsoft 365*" } | Select-Object -First 1
     if ($officeApp) {
-        $output += "  Detected Suite: $($officeApp.DisplayName) (v$($officeApp.DisplayVersion))"
+        $output += "  Installation State: INSTALLED (Traditional/MSI)"
+        $output += "  Detected Suite:     $($officeApp.DisplayName) (v$($officeApp.DisplayVersion))"
     } else {
-        $output += "  Status: No traditional Click-to-Run suite detected."
+        $output += "  Installation State: NOT DETECTED (No Office C2R configuration found in registry)"
     }
 }
 
-# 2. Outlook Configuration & Registry Profiles
-$output += "`n[2. Outlook Profile Status & Registry Detection]"
+# 2. Outlook Profile State & Registry Inspection
+$output += "`n[2. Outlook Profile & Configuration State]"
 $profiles = Get-ChildItem "HKCU:\Software\Microsoft\Office\16.0\Outlook\Profiles" -ErrorAction SilentlyContinue
-if ($profiles) {
+if ($profiles -and $profiles.Count -gt 0) {
     $profileNames = ($profiles | ForEach-Object { $_.PSChildName }) -join ", "
-    $output += "  Outlook Profiles Configured: $profileNames"
+    $output += "  Profile State:      CONFIGURED ($($profiles.Count) local profile(s) detected)"
+    $output += "  Profile Names:      $profileNames"
 } else {
-    $output += "  Outlook Profiles: Default profile uninitialized or managed via cloud identity."
+    $output += "  Profile State:      NOT INITIALIZED (No Outlook 16.0 registry profile configured for user)"
 }
 
-# 3. Microsoft Teams Client Detection & Cache Location
-$output += "`n[3. Microsoft Teams Client & Cache Inspection]"
+# 3. Microsoft Teams Process & Cache Inspection
+$output += "`n[3. Microsoft Teams Process & Local Cache State]"
 $teamsProcess = Get-Process -Name "ms-teams", "Teams" -ErrorAction SilentlyContinue
 if ($teamsProcess) {
-    $output += "  Teams Process: Running (PID: $($teamsProcess[0].Id), WorkingSet: $([math]::Round($teamsProcess[0].WorkingSet/1MB,2)) MB)"
+    $proc = $teamsProcess[0]
+    $output += "  Process State:      RUNNING (PID: $($proc.Id), Memory WorkingSet: $([math]::Round($proc.WorkingSet/1MB,2)) MB)"
 } else {
-    $output += "  Teams Process: Stopped (Idle)"
+    $output += "  Process State:      STOPPED / IDLE"
 }
 $newTeamsPath = "$env:LOCALAPPDATA\Packages\MSTeams_8wekyb3d8bbwe\LocalCache"
 $classicTeamsPath = "$env:APPDATA\Microsoft\Teams"
-$output += "  New Teams LocalCache Path: $newTeamsPath (Exists: $(Test-Path $newTeamsPath))"
-$output += "  Classic Teams Cache Path:  $classicTeamsPath (Exists: $(Test-Path $classicTeamsPath))"
+$output += "  New Teams LocalCache: $(if (Test-Path $newTeamsPath) { 'PRESENT (' + $newTeamsPath + ')' } else { 'ABSENT' })"
+$output += "  Classic Teams Cache:  $(if (Test-Path $classicTeamsPath) { 'PRESENT (' + $classicTeamsPath + ')' } else { 'ABSENT' })"
 
-# 4. OneDrive Synchronization Health
-$output += "`n[4. Microsoft OneDrive Sync Client Health]"
+# 4. OneDrive Process & Sync State
+$output += "`n[4. Microsoft OneDrive Process & Sync Directory State]"
 $oneDriveProcess = Get-Process -Name "OneDrive" -ErrorAction SilentlyContinue
 if ($oneDriveProcess) {
-    $output += "  OneDrive Client: Running (PID: $($oneDriveProcess[0].Id))"
+    $output += "  Process State:      RUNNING (PID: $($oneDriveProcess[0].Id))"
 } else {
-    $output += "  OneDrive Client: Not currently running"
+    $output += "  Process State:      STOPPED / IDLE"
 }
 $oneDriveFolder = "$env:USERPROFILE\OneDrive"
-$output += "  Local OneDrive Directory: $oneDriveFolder (Exists: $(Test-Path $oneDriveFolder))"
+$output += "  Local Sync Path:    $(if (Test-Path $oneDriveFolder) { 'PRESENT (' + $oneDriveFolder + ')' } else { 'ABSENT' })"
 
-# 5. Live Cloud Endpoint TCP Connectivity Verification
-$output += "`n[5. Microsoft 365 Cloud Endpoint Connectivity (Port 443)]"
+# 5. Live Cloud Endpoint TCP Port 443 Socket Connect & Latency
+$output += "`n[5. Microsoft 365 Cloud Endpoint TCP Socket Reachability (Port 443)]"
 $endpoints = @(
     "login.microsoftonline.com",
     "outlook.office.com",
     "teams.microsoft.com"
 )
+
 foreach ($ep in $endpoints) {
-    $t = Test-NetConnection -ComputerName $ep -Port 443 -WarningAction SilentlyContinue
-    $status = if ($t.TcpTestSucceeded) { "SUCCESS (Reachable)" } else { "FAILED (Blocked/Timeout)" }
-    $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: $status | RTT: $($t.PingReplyDetails.RoundtripTime)ms"
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $tcpClient = New-Object System.Net.Sockets.TcpClient
+    try {
+        $asyncResult = $tcpClient.BeginConnect($ep, 443, $null, $null)
+        $connectSuccess = $asyncResult.AsyncWaitHandle.WaitOne(3000, $false)
+        $sw.Stop()
+        if ($connectSuccess -and $tcpClient.Connected) {
+            $tcpClient.EndConnect($asyncResult)
+            $tcpClient.Close()
+            $latency = [math]::Round($sw.Elapsed.TotalMilliseconds, 1)
+            $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: SUCCESS (Reachable) | TCP Connect: ${latency} ms"
+        } else {
+            $tcpClient.Close()
+            $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: FAILED (Timeout > 3000ms)"
+        }
+    } catch {
+        $output += "  Endpoint: $($ep.PadRight(28)) | Port: 443 | Status: FAILED ($($_.Exception.Message))"
+    }
 }
 
 $output += "`n======================================================================"
-$output += "  END OF M365 CLIENT DIAGNOSTIC REPORT"
+$output += "  END OF M365 CLIENT DIAGNOSTIC REPORT (CLIENT-SIDE VERIFIED)"
 $output += "======================================================================"
 
-$output | Out-String
+$fullReport = $output -join "`r`n"
+Write-Output $fullReport
+
+# Save to evidence
+$evidencePath = "D:\Projects\enterprise-it-service-desk-lab\evidence\microsoft-365\m365-client-diagnostics-output.txt"
+$fullReport | Out-File -FilePath $evidencePath -Encoding utf8

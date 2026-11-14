@@ -33,7 +33,7 @@
 Designed, deployed, and tested a complete hands-on enterprise IT Service Desk and End-User Support operations lab simulating an IT department for a 25-employee consulting firm. Deployed an active Samba 4 Active Directory Domain Controller with DNS, Kerberos, and department shared folder permissions. Built a functioning web-based Service Desk portal with real-time ticket queues and SLA management. Executed live packet captures (`.pcap`) analyzing TCP, DNS, and ICMP protocols. Authored comprehensive operational runbooks and Python-based automated reporting tools to demonstrate day-to-day L1 IT support competence.
 
 **Key Skills:**  
-IT Service Desk, Incident Management, ITIL v4, Active Directory Administration, Samba 4, Kerberos, Group Policy, User Provisioning, Windows 11 Troubleshooting, PowerShell Scripting, Networking (TCP/IP, DNS, DHCP, APIPA), Wireshark Packet Analysis, Microsoft 365 Support, SLA Management, Mean Time to Resolve (MTTR).
+IT Service Desk, Incident Management, ITIL v4, Active Directory Administration (OUs, AGDLP Group Nesting, Password Policies, Kerberos, LDAP), Samba 4, User Provisioning, Windows 11 Troubleshooting (Fast Startup, Event ID 4740, Spooler, Resource Monitor), PowerShell Scripting, Networking (TCP/IP, DNS, DHCP, APIPA, 802.1Q Subinterfaces), Wireshark / TShark Packet Analysis, Microsoft 365 Client Diagnostics, SLA Management, Mean Time to Resolve (MTTR).
 
 ---
 
@@ -45,9 +45,9 @@ IT Service Desk, Incident Management, ITIL v4, Active Directory Administration, 
 **Project URL:** `https://github.com/sameerhdevops/enterprise-it-service-desk-lab`  
 **Description:**  
 A practical, verifiable IT operations portfolio built to demonstrate day-to-day competencies required for entry-level IT Support Engineer L1 and Service Desk Analyst roles:
-- Deployed a fully operational Samba 4 Active Directory Domain Controller on WSL2 Ubuntu with Kerberos ticket verification (`kinit`/`klist`) and department SMB shared folder permissions.
-- Implemented an interactive Service Desk web application with customer request portal, L1 agent console, 9 operational queues, and elapsed-clock-hour SLA tracking.
-- Captured genuine network traffic (`.pcap`) using tcpdump and Wireshark, forensically inspecting TCP 3-way handshakes and DNS query resolution.
+- Deployed a fully operational Samba 4 Active Directory Domain Controller on WSL2 Ubuntu with Kerberos ticket verification (`kinit`/`klist`), textbook AGDLP group nesting, and department SMB shared folder permissions.
+- Implemented an interactive Service Desk web application with customer request portal, L1 agent console, 10 operational queues, PBKDF2 authentication, and elapsed-clock-hour SLA tracking.
+- Captured genuine network traffic (`.pcap`) using tcpdump and Wireshark/TShark, forensically inspecting TCP 3-way handshakes and DNS query resolution.
 - Developed PowerShell diagnostic tools and 15 Windows 11 troubleshooting runbooks covering Fast Startup architecture, high CPU wait chains, and M365 client caching.
 - Created Python-based Service Desk MIS reporting tools with 100% passing automated unit tests.
 
@@ -74,7 +74,7 @@ A practical, verifiable IT operations portfolio built to demonstrate day-to-day 
 ### 3-Minute Technical Walkthrough:
 > *"When designing this lab, I focused on the five core areas an L1 IT Support Engineer touches daily: ticketing, identity, networking, desktop support, and metrics.*
 > 
-> *First, for ticketing, I engineered a web-based Service Desk platform following ITIL v4 principles. It provides a customer portal with 10 service request types, an operator console with 9 filtered queues, and automated Priority calculation based on an Impact times Urgency matrix. It tracks continuous elapsed clock hours for SLAs—4 hours for P1, 8 hours for P2, 72 hours for P3, and 120 hours for P4.*
+> *First, for ticketing, I engineered a web-based Service Desk platform following ITIL v4 principles. It provides a customer portal with 10 service request types, an operator console with 10 filtered queues, PBKDF2 authentication, and automated Priority calculation based on an Impact times Urgency matrix. It tracks continuous elapsed clock hours for SLAs—4 hours for P1, 8 hours for P2, 72 hours for P3, and 120 hours for P4.*
 > 
 > *Second, for directory services, rather than just reading about Active Directory, I deployed an actual Samba 4 Domain Controller for the domain `nexora.test` inside WSL2 Ubuntu. I structured department OUs, provisioned 12 domain user accounts, created security groups following the AGDLP framework, and configured domain password and lockout policies. I verified Kerberos ticket granting using `kinit` and `klist`, and tested SMB shared folder permissions, proving that unauthorized users receive access denied errors while authorized users can access department files.*
 > 
