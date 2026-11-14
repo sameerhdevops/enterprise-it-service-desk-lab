@@ -47,31 +47,51 @@ USER_DEFS = [
     ("akash.desai", "Akash", "Desai", "Senior Sales Manager", "OU=Sales", "GG-Sales")
 ]
 
-def protect_local_file(filepath: str):
+def protect_local_file(filepath: str) -> bool:
     """
     Applies restrictive operating system filesystem permissions to a local credentials file:
     - On Windows NTFS: Uses icacls to remove inheritance and grant Full Control strictly
       to the current user (%USERNAME%) and BUILTIN\\Administrators (*S-1-5-32-544).
-    - On POSIX / Linux: Uses chmod 0600 (owner read/write only).
+      Captures return code, treats failures as real errors, and verifies the resulting ACL.
+    - On POSIX / Linux: Uses chmod 0600 (owner read/write only) and verifies file mode.
+    Returns True on success, or raises RuntimeError/PermissionError on failure.
     """
     if not os.path.exists(filepath):
-        return
+        raise FileNotFoundError(f"Target file does not exist: {filepath}")
+    
     if os.name == "nt":
-        try:
-            username = os.environ.get("USERNAME")
-            if username:
-                subprocess.run(
-                    ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
-                    capture_output=True,
-                    check=False
-                )
-        except Exception as e:
-            print(f"[WARN] Failed to apply Windows ACLs on {filepath}: {e}", file=sys.stderr)
+        username = os.environ.get("USERNAME")
+        if not username:
+            raise RuntimeError("Cannot resolve USERNAME environment variable for ACL configuration")
+        
+        # 1. Apply restrictive ACLs
+        res = subprocess.run(
+            ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
+            capture_output=True,
+            text=True
+        )
+        if res.returncode != 0 or "Failed processing 0 files" not in res.stdout:
+            raise PermissionError(f"Failed to apply Windows ACLs on {filepath} (code {res.returncode}): {res.stderr or res.stdout}")
+        
+        # 2. Verify resulting ACL
+        verify_res = subprocess.run(["icacls.exe", filepath], capture_output=True, text=True)
+        if verify_res.returncode != 0:
+            raise PermissionError(f"Failed to query ACLs on {filepath} (code {verify_res.returncode}): {verify_res.stderr}")
+        
+        out = verify_res.stdout.upper()
+        if "(F)" not in out or username.upper() not in out:
+            raise PermissionError(f"ACL verification failed for {filepath}. Resulting ACL:\n{verify_res.stdout}")
+        return True
+
     elif hasattr(os, "chmod"):
-        try:
-            os.chmod(filepath, 0o600)
-        except OSError as e:
-            print(f"[WARN] Failed to chmod 0600 on {filepath}: {e}", file=sys.stderr)
+        import stat
+        os.chmod(filepath, 0o600)
+        mode = stat.S_IMODE(os.stat(filepath).st_mode)
+        if mode != 0o600:
+            raise PermissionError(f"POSIX permission verification failed for {filepath}: mode is {oct(mode)}, expected 0o600")
+        return True
+    
+    return False
 
 def generate_complex_password(length=16) -> str:
     """Generates an Active Directory complexity-compliant password."""
@@ -186,20 +206,31 @@ def main():
         print(f"[ERROR] Failed to stage credentials vault: {res.stderr}", file=sys.stderr)
         sys.exit(1)
 
-    # 4. Synchronize Administrator and Domain Users safely using Python script inside WSL
+    import atexit
+    atexit.register(lambda: run_wsl_cmd("rm -f /tmp/.ad_vault.json /tmp/.auth_* /tmp/.alex_pass /tmp/test_*.txt"))
+
+    # 4. Synchronize Administrator and Domain Users safely using direct Python SamDB API inside WSL
     print("\n--> [Step 1/5] Synchronizing Administrator and 12 Domain Accounts...")
     sync_script = """
     python3 - << 'PY_SYNC'
 import json, sys, subprocess
+from samba.samdb import SamDB
+from samba.auth import system_session
+from samba.param import LoadParm
 
 with open('/tmp/.ad_vault.json') as f:
     creds = json.load(f)
 
-# Rotate Administrator password
+lp = LoadParm()
+lp.load_default()
+samdb = SamDB(session_info=system_session(), lp=lp)
+
+# Rotate Administrator password using native SamDB API (zero command-line password exposure)
 admin_pass = creds['Administrator']
-res = subprocess.run(['samba-tool', 'user', 'setpassword', 'Administrator', f'--newpassword={admin_pass}'], capture_output=True, text=True)
-if res.returncode != 0:
-    print(f"[ERROR] Administrator password sync failed: {res.stderr}", file=sys.stderr)
+try:
+    samdb.setpassword("(&(objectClass=user)(sAMAccountName=Administrator))", admin_pass, force_change_at_next_login=False, username="Administrator")
+except Exception as e:
+    print(f"[ERROR] Administrator password sync failed: {e}", file=sys.stderr)
     sys.exit(1)
 
 USER_DEFS = [
@@ -217,7 +248,7 @@ USER_DEFS = [
     ("akash.desai", "Akash", "Desai", "Senior Sales Manager", "OU=Sales")
 ]
 
-# Ensure OUs exist
+# Ensure OUs exist (samba-tool ou list / ou create has no passwords)
 existing_ous = subprocess.run(['samba-tool', 'ou', 'list'], capture_output=True, text=True).stdout
 for ou in ["OU=HR", "OU=Finance", "OU=Operations", "OU=IT", "OU=Engineering", "OU=Sales"]:
     if ou.lower() not in existing_ous.lower():
@@ -226,23 +257,28 @@ for ou in ["OU=HR", "OU=Finance", "OU=Operations", "OU=IT", "OU=Engineering", "O
             print(f"[ERROR] Failed to create {ou}: {r.stderr}", file=sys.stderr)
             sys.exit(1)
 
-# Ensure Users exist and passwords match
+# Ensure Users exist and passwords match using native SamDB API (zero command-line password exposure)
 existing_users = subprocess.run(['samba-tool', 'user', 'list'], capture_output=True, text=True).stdout.splitlines()
 for uname, gname, sname, title, oupath in USER_DEFS:
     upass = creds[uname]
-    if uname in existing_users:
-        r = subprocess.run(['samba-tool', 'user', 'setpassword', uname, f'--newpassword={upass}'], capture_output=True, text=True)
-    else:
-        r = subprocess.run([
-            'samba-tool', 'user', 'create', uname, upass,
-            f'--given-name={gname}', f'--surname={sname}',
-            f'--job-title={title}', f'--userou={oupath}'
-        ], capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"[ERROR] Failed to configure user {uname}: {r.stderr}", file=sys.stderr)
+    try:
+        if uname in existing_users:
+            samdb.setpassword(f"(&(objectClass=user)(sAMAccountName={uname}))", upass, force_change_at_next_login=False, username=uname)
+        else:
+            samdb.newuser(
+                username=uname,
+                password=upass,
+                force_password_change_at_next_login_req=False,
+                userou=oupath,
+                surname=sname,
+                givenname=gname,
+                jobtitle=title
+            )
+    except Exception as e:
+        print(f"[ERROR] Failed to configure user {uname} via SamDB: {e}", file=sys.stderr)
         sys.exit(1)
 
-print("[OK] All 12 domain users and Administrator synchronized successfully.")
+print("[OK] All 12 domain users and Administrator synchronized via native SamDB API (zero command-line password exposure).")
 PY_SYNC
     """
     res = run_wsl_cmd(sync_script)
@@ -395,29 +431,52 @@ SMB_CONFIG
         sys.exit(1)
     print("     " + res.stdout.strip())
 
-    # 7. DNS Hygiene: Remove Stale Host Records
+    # 7. DNS Hygiene: Remove Stale Host Records with Strict Assertions
     print("\n--> [Step 4/5] Auditing & Purging Stale DNS Registrations...")
     dns_cleanup_script = """
-    # Get current eth0 IPv4 address
+    set -e
+    # 1. Retrieve current eth0 IPv4 address
     DC_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}')
+    if [ -z "$DC_IP" ]; then
+        echo "[ERROR] Could not determine live DC IPv4 address on eth0." >&2
+        exit 1
+    fi
     echo "[INFO] Live DC IPv4 Address: $DC_IP"
 
-    # Query all A records for softwaresamee in nexora.test
-    EXISTING_A=$(samba-tool dns query 127.0.0.1 nexora.test softwaresamee A -P 2>/dev/null | grep -oP '(?<=A:\\s)\\d+(\\.\\d+){3}' || true)
+    # 2. Query all existing A records for softwaresamee in nexora.test
+    EXISTING_A=$(samba-tool dns query 127.0.0.1 nexora.test softwaresamee A -P | grep -oP '(?<=A:\\s)\\d+(\\.\\d+){3}' || true)
+    echo "[INFO] Registered A records for softwaresamee: $EXISTING_A"
+
+    # 3. Purge stale records with verified command return code (no silent failure)
     for ip in $EXISTING_A; do
         if [ "$ip" != "$DC_IP" ]; then
             echo "[PURGE] Removing stale DNS A record: softwaresamee -> $ip"
-            samba-tool dns delete 127.0.0.1 nexora.test softwaresamee A "$ip" -P 2>/dev/null || true
+            samba-tool dns delete 127.0.0.1 nexora.test softwaresamee A "$ip" -P
         fi
     done
+
+    # 4. Strict post-cleanup verification: assert exclusively live DC IP remains
+    FINAL_A=$(samba-tool dns query 127.0.0.1 nexora.test softwaresamee A -P | grep -oP '(?<=A:\\s)\\d+(\\.\\d+){3}')
+    echo "[INFO] Verified A records after purge: $FINAL_A"
+    
+    if [ "$FINAL_A" != "$DC_IP" ]; then
+        echo "[SECURITY FAILURE] Stale DNS records remain: '$FINAL_A' (expected strictly '$DC_IP')" >&2
+        exit 1
+    fi
+    echo "[OK] DNS A-record hygiene verified: softwaresamee.nexora.test resolves exclusively to live DC IP $DC_IP."
     """
     res = run_wsl_cmd(dns_cleanup_script)
+    if res.returncode != 0:
+        print(f"[ERROR] DNS hygiene verification failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
+        run_wsl_cmd("rm -f /tmp/.ad_vault.json")
+        sys.exit(1)
     print("     " + res.stdout.strip())
 
     # 8. Rigorous Audit & Verification
     print("\n--> [Step 5/5] Executing Forensic AGDLP & Access Control Audit...")
     audit_script = """
     set -e
+    trap 'rm -f /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.alex_pass /tmp/.ad_vault.json /tmp/test_*.txt' EXIT INT TERM HUP
     OUT="/tmp/ad-audit.txt"
     echo "=== DOMAIN CONTROLLER STATUS ===" > "$OUT"
     samba-tool domain level show >> "$OUT" 2>&1
@@ -505,8 +564,6 @@ PY_AUTH_PREP
     smbclient //localhost/IT-Admin -A /tmp/.auth_it -c "put /tmp/test_it.txt it_doc.txt; ls; rm it_doc.txt" >> "$OUT" 2>&1
     rm -f /tmp/test_it.txt
 
-    # Cleanup temporary authentication files and vault
-    rm -f /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.ad_vault.json
     cat "$OUT"
     """
     res = run_wsl_cmd(audit_script)
@@ -521,6 +578,7 @@ PY_AUTH_PREP
 
     print(f"\n[EVIDENCE WRITTEN] Sanitized verification report written to: {evidence_file}")
     print("\nSamba 4 Active Directory configuration and AGDLP verification completed successfully!")
+    run_wsl_cmd("rm -f /tmp/.ad_vault.json /tmp/.auth_* /tmp/.alex_pass /tmp/test_*.txt")
 
 if __name__ == "__main__":
     main()

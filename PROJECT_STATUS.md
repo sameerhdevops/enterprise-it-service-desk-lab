@@ -76,7 +76,7 @@ All modules adhere to strict truth-in-advertising classifications:
 - **Target Repository:** `https://github.com/sameerhdevops/enterprise-it-service-desk-lab`
 - **Unit Test Suite (`reporting/tests/test_validation.py`):** 13/13 Tests Passed (0.022s)
 - **Dataset Validator (`scripts/validate-data.py`):** 5/5 Datasets Validated (0 Errors, 0 Warnings)
-- **Service Desk Test Suite (`scripts/test_service_desk_platform.py`):** 15/15 HTTP Tests Passed in isolated sandbox (100% Pass)
+- **Service Desk Test Suite (`scripts/test_service_desk_platform.py`):** 17/17 HTTP Tests Passed in isolated sandbox (100% Pass)
 - **Active Directory Provisioning (`scripts/deploy_samba_ad.py`):** Non-destructive AGDLP verification passed; credentials rotated and stored in git-ignored `.ad_credentials.json` (0 credentials leaked)
 - **Packet Capture & Inspection (`scripts/capture_packets.py`):** Clean loopback `.pcap` generated (3,776 bytes, 20 frames), 8 TShark display filters verified with dynamic frame metadata extraction
 - **Host M365 Diagnostics (`scripts/m365-client-diag.ps1`):** Live Windows 11 host scan completed with measured TCP connect latencies (992.9 ms, 338.2 ms, 434.8 ms) and sanitized workstation identifiers

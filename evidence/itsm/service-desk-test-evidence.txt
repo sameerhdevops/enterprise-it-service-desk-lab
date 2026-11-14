@@ -1,13 +1,13 @@
 NEXORA TECHNOLOGIES - SERVICE DESK PLATFORM VERIFICATION REPORT
-Timestamp: 2026-11-14T07:18:17.670731+00:00
+Timestamp: 2026-11-14T08:58:07.275231+00:00
 Target: http://127.0.0.1:8089
 Result: 17/17 TEST MODULES PASSED (100% SUCCESS)
 
-[INIT] Server running on 127.0.0.1:8089 using isolated DB: C:\Users\sameer\AppData\Local\Temp\tmpiczolqp4\test_servicedesk.db
+[INIT] Server running on 127.0.0.1:8089 using isolated DB: C:\Users\sameer\AppData\Local\Temp\tmpz5gwtnht\test_servicedesk.db
 [INIT] Dynamic agent credentials generated (no hardcoded credentials in source)
 [TEST 1] Security Headers & CSP: Verified nosniff, SAMEORIGIN, and CSP on /portal and /agent. [PASS]
 [TEST 2] Agent API Authorization: Unauthenticated access to /api/tickets, /api/stats, and /api/export rejected with HTTP 401. [PASS]
-[TEST 3] Authentication Gate: Validated PBKDF2 hash, issued session token (e7455596...). [PASS]
+[TEST 3] Authentication Gate: Validated PBKDF2 hash, issued session token (45434506...). [PASS]
 [TEST 4] Authenticated Queue Retrieval: Verified 10 seed tickets. [PASS]
 [TEST 5] Input Validation: Missing mandatory fields and invalid email rejected with HTTP 400. [PASS]
 [TEST 6] Priority Calculation & Dynamic SLA Target Verification:
@@ -22,8 +22,11 @@ Result: 17/17 TEST MODULES PASSED (100% SUCCESS)
 [TEST 9] CSRF & Complete Origin Validation:
   - Origin http://127.0.0.1:8089 -> 200 [PASS]
   - Origin http://localhost:8089 -> 200 [PASS]
+  - Scheme Mismatch https://127.0.0.1:8089 -> 403 Forbidden [PASS]
   - Port Mismatch http://localhost:9000 -> 403 Forbidden [PASS]
   - Untrusted Host http://evil-attacker-site.com -> 403 Forbidden [PASS]
+  - Malformed Port http://localhost:invalid -> 403 Forbidden (controlled) [PASS]
+  - Out-of-range Port http://localhost:99999999 -> 403 Forbidden (controlled) [PASS]
   - Unexpected Scheme ftp://localhost -> 403 Forbidden [PASS]
   - Missing Origin & Referer with cookie authentication -> 403 Forbidden [PASS]
 
@@ -36,29 +39,34 @@ Result: 17/17 TEST MODULES PASSED (100% SUCCESS)
   -> State: Resolved with verified technical resolution notes. [OK]
   -> State: Closed. [OK]
 [TEST 12] Ticket Reopening Lifecycle Regression & SLA Recalculation:
-  -> Reopened to In Progress: resolved_at=None, elapsed=0.0h, remaining=4.0h, breach=0, status='Within SLA'. [PASS]
-  -> Re-resolved: second resolved_at='2026-11-14 07:18:17', elapsed=0.0h, remaining=0.0h, breach=0, status='Within SLA'. [PASS]
+  -> Reopened Older Ticket (NEX-CTRL-OLD, 10h old): elapsed=10.0h, remaining=0.0h, breach=1, status='Breached'. [PASS]
+  -> Reopened Newer Ticket (NEX-CTRL-NEW, 1h old): elapsed=1.0h, remaining=3.0h, breach=0, status='Within SLA'. [PASS]
+  -> Re-resolved Newer Ticket: second resolved_at recorded; status='Within SLA'. [PASS]
 
 [TEST 13] Comment Segregation: Internal work notes protected from public exposure. [PASS]
-[TEST 14] Stored XSS Defense: Malicious payloads safely sanitized; cannot execute in portal or console. [PASS]
+
+[TEST 14] Stored XSS Mitigation & Rendering Sanitization:
+  - Application output-escaping logic verified against 4 distinct injection vectors. [PASS]
+  - Playwright Headless Chromium: Verified zero script execution and zero alerts in Customer Portal and Agent Console DOM. [PASS]
 
 [TEST 15] 10 Operational Queues Verification:
-  - Queue 'all           ': 17 tickets retrieved [PASS]
+  - Queue 'all           ': 19 tickets retrieved [PASS]
   - Queue 'unassigned    ': 7 tickets retrieved [PASS]
-  - Queue 'assigned_me   ': 5 tickets retrieved [PASS]
-  - Queue 'p1            ': 4 tickets retrieved [PASS]
+  - Queue 'assigned_me   ': 7 tickets retrieved [PASS]
+  - Queue 'p1            ': 5 tickets retrieved [PASS]
   - Queue 'p2            ': 4 tickets retrieved [PASS]
   - Queue 'wait_customer ': 1 tickets retrieved [PASS]
   - Queue 'wait_vendor   ': 0 tickets retrieved [PASS]
   - Queue 'sla_risk      ': 0 tickets retrieved [PASS]
-  - Queue 'sla_breached  ': 3 tickets retrieved [PASS]
-  - Queue 'resolved      ': 8 tickets retrieved [PASS]
+  - Queue 'sla_breached  ': 4 tickets retrieved [PASS]
+  - Queue 'resolved      ': 9 tickets retrieved [PASS]
 
-[TEST 16] Export API & Metric Integrity: Verified 17 records; metric resolved_ticket_share=47.1%. [PASS]
+[TEST 16] Export API & Metric Integrity: Verified 19 records; metric resolved_ticket_share=47.4%. [PASS]
 
 [TEST 17] Existing Database Credential Migration & Ticket Preservation:
-  -> Legacy password successfully invalidated; new rotated password verified.
-  -> Database tickets completely preserved (5 of 5 intact).
-  -> Local credentials store protected with OS ACLs: C:\Users\sameer\AppData\Local\Temp\tmpgesx882j\mig_creds.json [PASS]
+  - Automatic init_db() migration: Old password invalidated; new rotated credentials verified. [PASS]
+  - Database Integrity: All 5 ticket records, all activity records, and user count strictly preserved without duplicates. [PASS]
+  - Windows ACL Inspection: Verified Full Control (F) strictly restricted to SAMEER and BUILTIN\Administrators on C:\Users\sameer\AppData\Local\Temp\tmpekpbl3fu\mig_creds.json. [PASS]
+  - Migration Failure Handling: Verified database password is NOT rotated when credentials cannot be safely persisted. [PASS]
 
 ALL 17 TEST MODULES PASSED WITH 100% SUCCESS

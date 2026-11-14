@@ -178,6 +178,19 @@ The SLA does not apply in the following situations:
 |--------|-----------|----------|
 | SLA Compliance Dashboard | Real-time | Service Desk Team |
 | Weekly SLA Summary | Weekly (Monday) | IT Manager, Service Desk Lead |
+
+## 11. Ticket Reopening & Continuous Clock SLA Recalculation Policy
+
+When a resolved or closed incident is reopened by a user or technician (transitioning back to **In Progress**):
+
+1. **Resolution Timestamp Cleared:** The existing resolution timestamp (`resolved_at`) is set to `NULL`.
+2. **Continuous Clock Resume:** The SLA timer resumes measuring elapsed time against the original ticket creation timestamp (`created_at`).
+   - The SLA clock is **NOT reset to 0.0 hours**. Historical elapsed time is strictly preserved.
+   - Reopening an incident does not grant a new or refreshed SLA resolution window.
+3. **Breach Evaluation on Reopening:**
+   - If cumulative elapsed continuous clock time since ticket creation (`now - created_at`) exceeds the defined SLA target hours (e.g. >4.0h for P1), the reopened ticket immediately registers as **Breached** (`sla_breached = 1`, `sla_status = 'Breached'`).
+   - If cumulative elapsed time remains within the SLA target window, the remaining time is calculated as `target_hours - elapsed_hours`, and the ticket remains **Within SLA** (or **At Risk** if elapsed time is ≥75% of target).
+4. **Subsequent Re-resolution:** Upon subsequent technical resolution, a new `resolved_at` timestamp is recorded, capturing the total elapsed time from ticket creation to final resolution.
 | Monthly SLA Report | Monthly (1st business day) | IT Manager, Department Heads |
 | SLA Breach Report | Per breach (within 1 business day) | IT Manager |
 

@@ -80,32 +80,52 @@ def verify_password(password: str, salt: str, expected_hash: str) -> bool:
     key, _ = hash_password(password, salt)
     return secrets.compare_digest(key, expected_hash)
 
-def protect_local_file(filepath: str):
+def protect_local_file(filepath: str) -> bool:
     """
     Applies restrictive operating system filesystem permissions to a local credentials file:
     - On Windows NTFS: Uses icacls to remove inheritance and grant Full Control strictly
       to the current user (%USERNAME%) and BUILTIN\\Administrators (*S-1-5-32-544).
-    - On POSIX / Linux: Uses chmod 0600 (owner read/write only).
+      Captures return code, treats failures as real errors, and verifies the resulting ACL.
+    - On POSIX / Linux: Uses chmod 0600 (owner read/write only) and verifies file mode.
+    Returns True on success, or raises RuntimeError/PermissionError on failure.
     """
     if not os.path.exists(filepath):
-        return
+        raise FileNotFoundError(f"Target file does not exist: {filepath}")
+    
     if os.name == "nt":
-        try:
-            import subprocess
-            username = os.environ.get("USERNAME")
-            if username:
-                subprocess.run(
-                    ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
-                    capture_output=True,
-                    check=False
-                )
-        except Exception as e:
-            print(f"[WARN] Failed to apply Windows ACLs on {filepath}: {e}", file=sys.stderr)
+        import subprocess
+        username = os.environ.get("USERNAME")
+        if not username:
+            raise RuntimeError("Cannot resolve USERNAME environment variable for ACL configuration")
+        
+        # 1. Apply restrictive ACLs
+        res = subprocess.run(
+            ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
+            capture_output=True,
+            text=True
+        )
+        if res.returncode != 0 or "Failed processing 0 files" not in res.stdout:
+            raise PermissionError(f"Failed to apply Windows ACLs on {filepath} (code {res.returncode}): {res.stderr or res.stdout}")
+        
+        # 2. Verify resulting ACL
+        verify_res = subprocess.run(["icacls.exe", filepath], capture_output=True, text=True)
+        if verify_res.returncode != 0:
+            raise PermissionError(f"Failed to query ACLs on {filepath} (code {verify_res.returncode}): {verify_res.stderr}")
+        
+        out = verify_res.stdout.upper()
+        if "(F)" not in out or username.upper() not in out:
+            raise PermissionError(f"ACL verification failed for {filepath}. Resulting ACL:\n{verify_res.stdout}")
+        return True
+
     elif hasattr(os, "chmod"):
-        try:
-            os.chmod(filepath, 0o600)
-        except OSError as e:
-            print(f"[WARN] Failed to chmod 0600 on {filepath}: {e}", file=sys.stderr)
+        import stat
+        os.chmod(filepath, 0o600)
+        mode = stat.S_IMODE(os.stat(filepath).st_mode)
+        if mode != 0o600:
+            raise PermissionError(f"POSIX permission verification failed for {filepath}: mode is {oct(mode)}, expected 0o600")
+        return True
+    
+    return False
 
 def get_or_create_bootstrap_password(creds_file: str = LOCAL_CREDENTIALS_FILE) -> str:
     """
@@ -129,16 +149,26 @@ def get_or_create_bootstrap_password(creds_file: str = LOCAL_CREDENTIALS_FILE) -
             pass
 
     generated_pass = secrets.token_urlsafe(16)
+    dir_name = os.path.dirname(os.path.abspath(creds_file))
+    tmp_file = os.path.join(dir_name, f".tmp_creds_{secrets.token_hex(6)}.json")
     try:
-        with open(creds_file, "w", encoding="utf-8") as f:
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump({
                 "username": "alex.chen",
                 "bootstrap_password": generated_pass,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "note": "Local credential store for IT Service Desk. Ignored by Git."
             }, f, indent=2)
+        protect_local_file(tmp_file)
+        if os.path.exists(creds_file):
+            os.replace(tmp_file, creds_file)
+        else:
+            os.rename(tmp_file, creds_file)
         protect_local_file(creds_file)
     except Exception as e:
+        if os.path.exists(tmp_file):
+            try: os.unlink(tmp_file)
+            except Exception: pass
         print(f"[WARN] Could not write local credentials file: {e}", file=sys.stderr)
 
     return generated_pass
@@ -147,7 +177,7 @@ def migrate_or_rotate_user_credentials(db_path: str, username: str = "alex.chen"
     """
     Rotates credentials for a user in an existing database without deleting, modifying,
     or recreating any tickets or ticket activity logs.
-    Saves the new credential to creds_file and protects it with OS-level permissions.
+    Ensures safe persistence and verified ACL protection before updating the database.
     """
     if not new_password:
         new_password = secrets.token_urlsafe(16)
@@ -155,6 +185,30 @@ def migrate_or_rotate_user_credentials(db_path: str, username: str = "alex.chen"
     pwd_hash, salt = hash_password(new_password)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
+    # Step 1: Safely persist and protect new credentials FIRST
+    dir_name = os.path.dirname(os.path.abspath(creds_file))
+    tmp_file = os.path.join(dir_name, f".tmp_creds_{secrets.token_hex(6)}.json")
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "username": username,
+                "bootstrap_password": new_password,
+                "rotated_at": now_str,
+                "note": "Local credential store for IT Service Desk. Ignored by Git."
+            }, f, indent=2)
+        protect_local_file(tmp_file)
+        if os.path.exists(creds_file):
+            os.replace(tmp_file, creds_file)
+        else:
+            os.rename(tmp_file, creds_file)
+        protect_local_file(creds_file)
+    except Exception as e:
+        if os.path.exists(tmp_file):
+            try: os.unlink(tmp_file)
+            except Exception: pass
+        raise RuntimeError(f"Cannot safely persist credentials to {creds_file}; aborting rotation: {e}")
+
+    # Step 2: Update users table in existing database
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("SELECT id, username FROM users WHERE username = ?", (username,))
@@ -173,21 +227,9 @@ def migrate_or_rotate_user_credentials(db_path: str, username: str = "alex.chen"
     conn.commit()
     conn.close()
 
-    try:
-        with open(creds_file, "w", encoding="utf-8") as f:
-            json.dump({
-                "username": username,
-                "bootstrap_password": new_password,
-                "rotated_at": now_str,
-                "note": "Local credential store for IT Service Desk. Ignored by Git."
-            }, f, indent=2)
-        protect_local_file(creds_file)
-    except Exception as e:
-        print(f"[WARN] Could not write updated credentials file: {e}", file=sys.stderr)
-
     return new_password
 
-def init_db(db_path=DEFAULT_DB_FILE):
+def init_db(db_path=DEFAULT_DB_FILE, creds_file=LOCAL_CREDENTIALS_FILE):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("""
@@ -249,7 +291,7 @@ def init_db(db_path=DEFAULT_DB_FILE):
     # Seed default L1 agent account if users table is empty
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
-        admin_pass = get_or_create_bootstrap_password()
+        admin_pass = get_or_create_bootstrap_password(creds_file)
         pwd_hash, salt = hash_password(admin_pass)
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         c.execute("""
@@ -267,19 +309,35 @@ def init_db(db_path=DEFAULT_DB_FILE):
             if verify_password("NexoraSupport#2026", stored_salt, stored_hash):
                 new_pass = secrets.token_urlsafe(16)
                 new_hash, new_salt = hash_password(new_pass)
-                c.execute("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", (new_hash, new_salt, user_id))
-                conn.commit()
+                now_iso = datetime.now(timezone.utc).isoformat()
+                
+                # Step 1: Safely persist and protect the new credentials FIRST
+                dir_name = os.path.dirname(os.path.abspath(creds_file))
+                tmp_file = os.path.join(dir_name, f".tmp_mig_{secrets.token_hex(6)}.json")
                 try:
-                    with open(LOCAL_CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+                    with open(tmp_file, "w", encoding="utf-8") as f:
                         json.dump({
                             "username": "alex.chen",
                             "bootstrap_password": new_pass,
-                            "migrated_at": datetime.now(timezone.utc).isoformat(),
+                            "migrated_at": now_iso,
                             "note": "Migrated from legacy credentials. Local secret store protected by OS ACLs."
                         }, f, indent=2)
-                    protect_local_file(LOCAL_CREDENTIALS_FILE)
+                    protect_local_file(tmp_file)
+                    if os.path.exists(creds_file):
+                        os.replace(tmp_file, creds_file)
+                    else:
+                        os.rename(tmp_file, creds_file)
+                    protect_local_file(creds_file)
                 except Exception as e:
-                    print(f"[WARN] Failed to write migrated credentials file: {e}", file=sys.stderr)
+                    if os.path.exists(tmp_file):
+                        try: os.unlink(tmp_file)
+                        except Exception: pass
+                    conn.close()
+                    raise RuntimeError(f"Cannot safely persist migrated credentials to {creds_file}; aborting credential rotation: {e}")
+
+                # Step 2: Update users table only after verified persistence
+                c.execute("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", (new_hash, new_salt, user_id))
+                conn.commit()
 
     # Check if seed tickets exist
     c.execute("SELECT COUNT(*) FROM tickets")
@@ -436,57 +494,68 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             return False
         try:
             parsed = urllib.parse.urlparse(url_str)
+            
+            # Require origin scheme to match the actual server scheme (reject HTTPS when serving HTTP)
+            expected_scheme = "https" if getattr(self.server, "is_ssl", False) else "http"
+            if parsed.scheme != expected_scheme:
+                return False
+
+            # Validate hostname: must be localhost, 127.0.0.1, or bound server host
+            allowed_hosts = {"127.0.0.1", "localhost"}
+            server_host = self.server.server_address[0]
+            if server_host and server_host != "0.0.0.0":
+                allowed_hosts.add(server_host)
+                
+            if not parsed.hostname or parsed.hostname not in allowed_hosts:
+                return False
+
+            # Validate port: must match server listening port exactly
+            server_port = self.server.server_address[1]
+            try:
+                origin_port = parsed.port if parsed.port is not None else (80 if parsed.scheme == "http" else 443)
+            except (ValueError, TypeError):
+                # Malformed port (e.g. non-integer or > 65535)
+                return False
+
+            if origin_port != server_port:
+                return False
+
+            return True
         except Exception:
             return False
-
-        # Validate scheme: must be http or https
-        if parsed.scheme not in ("http", "https"):
-            return False
-
-        # Validate hostname: must be localhost, 127.0.0.1, or bound server host
-        allowed_hosts = {"127.0.0.1", "localhost"}
-        server_host = self.server.server_address[0]
-        if server_host and server_host != "0.0.0.0":
-            allowed_hosts.add(server_host)
-            
-        if parsed.hostname not in allowed_hosts:
-            return False
-
-        # Validate port: must match server listening port exactly
-        server_port = self.server.server_address[1]
-        origin_port = parsed.port if parsed.port is not None else (80 if parsed.scheme == "http" else 443)
-        if origin_port != server_port:
-            return False
-
-        return True
 
     def verify_csrf_and_origin(self) -> bool:
         """
         Enforces same-origin request verification on mutating POST endpoints.
         Validates the complete allowed origin including scheme, hostname, and port.
         Rejects cross-origin POSTs, port mismatches (e.g. port 9000 vs 8080),
-        unexpected schemes, or untrusted hostnames.
-        Requires valid Origin/Referer on all mutating requests to prevent cookie-authenticated CSRF.
+        unexpected schemes (e.g. HTTPS when serving HTTP, or ftp://),
+        invalid ports, untrusted hostnames, or missing Origin and Referer headers.
+        Returns a controlled HTTP 403 Forbidden without throwing uncaught exceptions.
         """
-        origin = self.headers.get("Origin")
-        referer = self.headers.get("Referer")
+        try:
+            origin = self.headers.get("Origin")
+            referer = self.headers.get("Referer")
 
-        # Mutating requests require either an Origin or Referer header
-        if not origin and not referer:
-            self.send_json({"status": "error", "message": "Forbidden: Origin or Referer header required for mutating request."}, 403)
+            # Mutating requests require either an Origin or Referer header
+            if not origin and not referer:
+                self.send_json({"status": "error", "message": "Forbidden: Origin or Referer header required for mutating request."}, 403)
+                return False
+
+            if origin:
+                if not self.is_valid_origin_url(origin):
+                    self.send_json({"status": "error", "message": "Forbidden: Untrusted, cross-origin or malformed Origin header."}, 403)
+                    return False
+
+            if referer:
+                if not self.is_valid_origin_url(referer):
+                    self.send_json({"status": "error", "message": "Forbidden: Untrusted, cross-origin or malformed Referer header."}, 403)
+                    return False
+
+            return True
+        except Exception as e:
+            self.send_json({"status": "error", "message": f"Forbidden: Malformed request origin ({type(e).__name__})."}, 403)
             return False
-
-        if origin:
-            if not self.is_valid_origin_url(origin):
-                self.send_json({"status": "error", "message": "Forbidden: Untrusted or cross-origin Origin header."}, 403)
-                return False
-
-        if referer:
-            if not self.is_valid_origin_url(referer):
-                self.send_json({"status": "error", "message": "Forbidden: Untrusted or cross-origin Referer header."}, 403)
-                return False
-
-        return True
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -815,7 +884,14 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             # Reopening: Transitioning from Resolved or Closed back to In Progress
             if new_status == "In Progress" and current_status in ("Resolved", "Closed"):
                 updates.append("resolved_at = NULL")
-                updates.append("sla_breached = 0")
+                # Continuous clock elapsed SLA evaluation:
+                # Reopening resumes measuring continuous elapsed clock hours from created_at
+                created_dt = parse_iso_datetime(ticket["created_at"])
+                if created_dt:
+                    elapsed = (now_dt - created_dt).total_seconds() / 3600.0
+                    breached = 1 if (elapsed > float(ticket["sla_target_hours"])) else 0
+                    updates.append("sla_breached = ?")
+                    params.append(breached)
             
             # Resolution: Transitioning to Resolved or Closed
             elif new_status == "Resolved":
