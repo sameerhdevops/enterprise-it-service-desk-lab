@@ -1,132 +1,93 @@
 # Design Decisions
 
-Technical choices made for this lab and why. Each decision is driven by some combination of: what's realistic for L1 support, what I can actually run on my hardware, and what's free.
+Technical choices made for this lab and why. Each decision is driven by what is realistic for L1 support, reproducible on standard hardware, and achievable with zero software licensing costs.
 
-## ITSM Platforms: ServiceNow PDI + Jira Free Tier
+## ITSM Platform Strategy: Interactive Portal + Enterprise Blueprints
 
-**Decision**: Use both ServiceNow (Personal Developer Instance) and Jira Service Management (free plan, up to 3 agents).
+**Decision**: Build and run a local interactive Python Service Desk portal (`itsm/portal/app.py`), complemented by documented reference blueprints for ServiceNow and Jira Service Management.
 
-**Why two platforms?**
+**Why a local portal?**
 
-Job postings for L1 support roles mention both. Some companies are ServiceNow shops, others use Jira (or Zendesk, or Freshdesk, but ServiceNow and Jira are the most common for roles I'm targeting). Using both means I can talk about either one in an interview, and I can compare how they approach the same workflow differently.
+- **Zero Cost & Always Available**: Cloud developer instances (like ServiceNow PDI) sleep or reset after inactivity, requiring re-registration and internet access. A local portal running on `localhost:8080` starts instantly, never expires, and costs ₹0.
+- **Deep Technical Understanding**: Building the ticketing portal from scratch using Python's standard library (`http.server` + `sqlite3`) required directly implementing core ITIL concepts:
+  - 3×3 priority matrix mapping Impact and Urgency to P1–P4.
+  - Strict lifecycle state machine (New → Assigned → In Progress → Waiting for Customer → Resolved → Closed).
+  - 10 operational queues for technician triage.
+  - Dual-perspective commenting (public customer updates vs. private agent work notes).
+  - Web security fundamentals: PBKDF2 password hashing, session cookies (`HttpOnly`, `SameSite=Strict`), complete CSRF/Origin validation, and stored XSS defense.
 
-**Why ServiceNow PDI specifically?**
+**Why document ServiceNow and Jira SM?**
 
-- It's free — ServiceNow gives developer instances to anyone who registers on their developer portal.
-- It's the real platform, not a demo or simulation. Same interface, same modules, same configuration that production instances use.
-- The downside: PDIs reset if you don't log in for ~10 days, and they're on shared infrastructure so they can be slow. That's manageable for a learning lab. I save my configuration steps and screenshots so a reset isn't starting from zero.
+Job postings for L1 support roles frequently mention ServiceNow or Jira. Documenting their field dictionaries, request types, SLA timers, and configuration steps in `itsm/` ensures familiarity with the exact terminology, choice lists, and workflows used by commercial enterprise platforms.
 
-**Why Jira SM free tier?**
+## Active Directory: Samba 4 AD DC in WSL2
 
-- Free for up to 3 agents, which is exactly our fictional IT team size.
-- Cloud-hosted, no setup beyond creating the project.
-- Atlassian's ecosystem (Confluence, Jira Software) is common in tech companies, so familiarity with the Jira interface has broader value.
+**Decision**: Deploy an isolated Samba 4 Active Directory Domain Controller for realm `nexora.test` inside WSL2 Ubuntu, combined with practical Windows administrative runbooks.
 
-**What I'm not using:**
+**Why Samba 4 in WSL2 instead of a Windows Server GUI VM?**
 
-- Zendesk, Freshdesk, etc. — They'd work fine, but two platforms is enough. Adding more doesn't prove additional skills; it just spreads the work thinner.
-- Self-hosted ticketing (osTicket, GLPI) — Would demonstrate different skills, but the industry momentum is toward cloud ITSM platforms. Spending time configuring a self-hosted PHP ticketing system isn't the best use of my time when the target roles use ServiceNow or Jira.
+- **Resource Efficiency**: A full Windows Server GUI virtual machine requires substantial dedicated CPU and RAM, which can slow down a workstation. WSL2 runs natively on Windows with minimal overhead.
+- **Real Enterprise Protocols**: Samba 4 is a production-grade, protocol-compatible Active Directory Domain Controller. It provides:
+  - Real Kerberos KDC for ticket granting ticket (TGT) acquisition and inspection via `kinit` and `klist`.
+  - Real LDAP directory for user, group, and organizational unit (OU) queries.
+  - Textbook AGDLP group nesting: Accounts → Global Groups (`GG-*`) → Domain Local Groups (`DL-*`) → Permissions.
+  - Real SMB share permission controls (`CompanyShared`, `Finance-Private`, `HR-Private`, `IT-Admin`).
+- **Standard Operating Runbooks**: For Windows-specific GUI administration (Active Directory Users and Computers, Group Policy Management Console), step-by-step administrative runbooks are maintained in `active-directory/`.
 
-## Local Windows Tools Instead of VMs
+## Data Storage: SQLite for Interactive App, CSV for Datasets & Reporting
 
-**Decision**: Do most exercises directly on the Windows 11 host instead of spinning up Windows Server VMs.
+**Decision**: Use SQLite for the live Service Desk application, and canonical CSV files for sample incident registers, asset tracking, and reporting.
 
-**Why?**
+**Why this division?**
 
-- **Hardware constraints**: 16 GB RAM doesn't leave much room for comfortable VM usage alongside everything else (see [environment-details.md](environment-details.md)). Running ServiceNow in a browser + Packet Tracer + a Windows Server VM simultaneously would mean constant swapping.
-- **Windows 11 Enterprise has most of what I need**: Group Policy Editor (gpedit.msc), Event Viewer, Disk Management, Device Manager, PowerShell with AD modules (limited, but functional for learning the commands), Computer Management — these are the same tools on the workstation side that an L1 engineer uses daily.
-- **L1 support is mostly workstation-side anyway**: The majority of L1 tickets involve the user's Windows machine, not the server. Password resets, printer issues, Outlook problems, hardware troubleshooting — this all happens on Windows 10/11 workstations. Learning the server side matters, but it's more of an L2/sysadmin skill.
+- **SQLite for the Web Portal (`nexora_servicedesk.db`)**: An interactive ticketing system requires relational ACID transactions, foreign keys, auto-incrementing IDs, and concurrency-safe status updates. SQLite provides all of this natively in the Python standard library with zero server installation.
+- **CSV for Datasets & Reporting (`incidents/`, `asset-management/`)**:
+  - Transparent & Human-Readable: Anyone viewing the GitHub repository can inspect the raw data directly in a browser or spreadsheet.
+  - Git-Friendly: Text-based CSV files diff line-by-line cleanly across commits.
+  - Python Standard Library Processing: The reporting script (`reporting/report-generator.py`) and validator (`scripts/validate-data.py`) process CSVs directly using Python's built-in `csv` module, demonstrating raw data handling without heavy third-party libraries.
 
-**The trade-off**:
+## Python Standard Library Only (Zero Pip Dependencies)
 
-I can't do full Active Directory domain exercises (domain join, GPO deployment to multiple machines, proper user provisioning with ADUC). That's a gap I'm aware of. The mitigation:
-- Document the procedures as if I had a DC, referencing Microsoft's docs for accuracy
-- Use PowerShell AD module commands where they work without a domain
-- If I get access to a cloud lab (Azure AD, AWS WorkSpaces, etc.) or better hardware, I can add this module properly
-- Note this gap honestly — interviewers would rather hear "I couldn't run a full DC on my laptop so I focused on X instead" than have me pretend I ran something I didn't
-
-## CSV for Data (Not a Database)
-
-**Decision**: Use CSV files for asset management, incident data, and reporting input rather than SQLite, PostgreSQL, or any database.
-
-**Why?**
-
-- **It's what small IT teams actually use**: A 25-person company's IT team is tracking assets in a spreadsheet, not a database. Being realistic here matters more than being technically sophisticated.
-- **No dependencies**: CSV files work with Python's stdlib `csv` module, Excel, Google Sheets, and any text editor. No database drivers to install, no connection strings to manage, no server to run.
-- **Git-friendly**: CSVs diff cleanly in Git. I can see exactly what changed between commits. A SQLite binary blob doesn't give me that.
-- **Good enough**: For 25 employees' worth of assets and incidents, CSV performance isn't a concern. If this were a 2,500-person org, I'd want a database. At this scale, CSV is the right tool.
-- **Easy to demonstrate**: If someone looks at the repo, they can read the CSV in a browser or text editor. No setup required.
-
-**What I'd change at scale**:
-
-If this were a real project or the fictional company grew, I'd move to SQLite first (single file, still no server, stdlib support in Python) and then to PostgreSQL if actual multi-user concurrent access were needed. The Python reporting scripts are written so this migration would mostly mean changing the data access layer, not the report logic.
-
-## Python Standard Library Only for Reporting
-
-**Decision**: No pip dependencies. Reporting scripts use only `csv`, `json`, `os`, `datetime`, `collections`, and string formatting.
+**Decision**: The core lab functionality requires zero external pip packages. All scripts rely exclusively on the Python 3 standard library (`http.server`, `sqlite3`, `csv`, `json`, `hashlib`, `unittest`).
 
 **Why?**
 
-- **Zero setup friction**: Clone the repo, run the script. No `pip install`, no virtual environment, no version conflicts. It just works if you have Python.
-- **Demonstrates fundamentals**: Using pandas or openpyxl would be the "real" answer for production reporting, but this lab is about showing I can write working code, not that I can install libraries. The stdlib forces me to understand what I'm doing with the data instead of calling `df.groupby()`.
-- **Relevant to the role**: L1 support scripting is usually quick-and-dirty PowerShell or Python to automate a repetitive task. It's not data engineering. Keeping the tools simple matches the role.
-- **The `requirements.txt` says so explicitly**: The project's requirements.txt documents this choice — "Only standard library is required for core functionality. No external packages needed." That's the contract.
+- **Zero Setup Friction**: Clone the repository and run the scripts immediately. No `pip install`, no virtual environment configuration, and no dependency breakages.
+- **Demonstrates Core Competence**: Writing reporting logic, state machines, and validation scripts with standard library modules proves genuine understanding of the underlying logic rather than relying on high-level abstractions like `pandas.DataFrame`.
+- **Testing Separation**: Automated browser verification uses Playwright, but this is isolated in `requirements-test.txt` and is not required for running the core lab, reports, or validation.
 
-**Where I'd add dependencies**:
+## Networking: Cisco IOS Config Drafts & Loopback Packet Analysis
 
-If I needed to generate formatted Excel files (`.xlsx`), I'd add `openpyxl`. If I needed data visualization (charts/graphs), I'd add `matplotlib`. But for now, HTML reports (generated from string templates) and CSV outputs cover what I need.
-
-## Cisco Packet Tracer for Networking
-
-**Decision**: Use Packet Tracer rather than GNS3, EVE-NG, or real hardware.
+**Decision**: Author syntax-accurate Cisco 2911 router and 2960 switch configuration drafts (`.ios`) and Packet Tracer lab guides, combined with a 20-frame loopback packet capture (`.pcap`) analyzed using TShark.
 
 **Why?**
 
-- **Free and lightweight**: Packet Tracer runs comfortably alongside everything else. GNS3 needs actual IOS images (licensing issues) and more RAM for the emulated devices.
-- **Standard for learning**: It's what Cisco's own networking courses use. If I'm learning networking fundamentals (VLANs, DHCP, DNS, basic routing), Packet Tracer covers everything I need. I'm not trying to pass the CCNA right now — I'm trying to understand enough networking to diagnose "I can't reach the shared drive" from the L1 seat.
-- **Visual topology builder**: Being able to drag-and-drop a network, cable it up, and test connectivity helps me understand topologies in a way that command-line-only simulators don't, at least at this stage.
-- **Simulation mode**: Packet Tracer lets you watch packets travel hop-by-hop through the network, which is excellent for understanding how ARP, DNS queries, and TCP handshakes actually work.
-
-**What Packet Tracer can't do**:
-
-- It doesn't emulate real IOS fully — some advanced commands aren't available
-- No Linux/Windows hosts inside the simulation (you get generic end devices)
-- No real traffic generation or performance testing
-
-For L1 networking skills, none of those limitations matter. I'm not configuring production switches. I'm building the mental model of how networks work so I can troubleshoot connectivity issues intelligently.
+- **Reference Design Files**: Real enterprise Cisco hardware is impractical for a home lab. Packet Tracer topology guides and `.ios` configuration drafts allow studying VLAN trunking (802.1Q), router-on-a-stick, DHCP exclusion pools, and default gateway configurations.
+- **Empirical Packet Analysis**: The 20-frame packet capture (`evidence/packet-captures/nexora-lab-traffic.pcap`) captures local loopback traffic to demonstrate real network protocol inspection (TCP 3-way handshake, DNS query/response, ICMP) using `tshark` display filters, without falsely claiming access to physical corporate switch cabling.
 
 ## Markdown for Documentation
 
-**Decision**: All documentation in Markdown (`.md` files), no Word docs, no Confluence, no wiki platform.
+**Decision**: All operational documentation, runbooks, and policies are authored in GitHub Flavored Markdown (`.md`).
 
 **Why?**
 
-- **Version control**: Markdown diffs cleanly in Git. I can see every edit, every improvement, every correction in the commit history.
-- **Portable**: Renders on GitHub, in VS Code, in any text editor. No special software needed to read it.
-- **Focus on content**: No time spent on formatting, fonts, or layouts. The content is what matters here.
-- **Interview-ready**: If I share a GitHub link, the interviewer can read everything directly in their browser. No downloads, no file format issues.
-
-**What I'd use in a real job**:
-
-Whatever the company uses. Confluence, SharePoint, ServiceNow's knowledge base, Google Docs — the point of this lab is learning to write good documentation, not learning a specific documentation platform. The skills transfer regardless of the tool.
+- **Version Control**: Markdown diffs cleanly in Git, tracking every procedural update and technical correction.
+- **Portability**: Renders cleanly in GitHub, VS Code, or any text viewer without proprietary office software.
+- **Transferable Skill**: Modern IT organizations rely heavily on Markdown for internal knowledge bases, runbooks, and GitHub/GitLab documentation repositories.
 
 ## Git for Everything
 
-**Decision**: The entire lab is a single Git repository with all modules tracked.
+**Decision**: The entire lab is managed in a single Git repository with clean commit history.
 
 **Why?**
 
-- **History as evidence**: The commit history shows when I worked on what, how my approach evolved, and that this is genuine incremental work — not something generated in one sitting.
-- **Branching for experiments**: If I want to try a different approach to something, I can branch, try it, and merge or discard. No risk of losing working configurations.
-- **Practical skill**: Version control is expected even for non-developer IT roles now. Showing I use it naturally is a plus.
-- **Single repo, not multiple**: One repository for the whole lab because the modules are interconnected. An incident scenario might touch `itsm/`, `windows-support/`, `knowledge-base/`, and `reporting/` — that cross-cutting workflow belongs in one repo.
+- **Evidence of Work**: The commit history shows real incremental development, technical corrections, and systematic verification.
+- **Discipline**: Using Git branches, descriptive commit messages, and automated test checks reflects professional engineering habits expected in modern IT support roles.
 
 ## Directory Structure: By Function, Not by Tool
 
-**Decision**: Top-level directories are organised by what they do (`incidents/`, `knowledge-base/`, `windows-support/`) rather than by which tool they use (`servicenow/`, `powershell/`, `python/`).
+**Decision**: Top-level directories are organized by functional domain (`incidents/`, `knowledge-base/`, `windows-support/`, `active-directory/`, `networking/`) rather than by tool.
 
 **Why?**
 
-Real support work is organised around the work, not the tools. You don't think "I'm going to use PowerShell now" — you think "I need to fix this printer problem" and then use whatever tools are appropriate. The directory structure reflects that.
-
-The `itsm/` directory is the one exception — it's organised by platform (`servicenow/`, `jira-service-management/`) because ITSM platform configuration is inherently platform-specific. You can't write a generic "ticketing setup" that applies to both.
+Real IT support work is organized around problems and services, not tools. When an engineer troubleshoots an issue, they diagnose the affected functional area using whatever tools are appropriate. Organizing by function makes the repository intuitive to navigate for any interviewer or support technician.

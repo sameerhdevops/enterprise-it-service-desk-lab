@@ -588,25 +588,26 @@ if not match:
 dc_ip = match.group(1)
 print(f"[INFO] Live DC IPv4 Address: {dc_ip}")
 
-# 2. Query all existing A records for softwaresamee in nexora.test
-query_cmd = ["samba-tool", "dns", "query", "127.0.0.1", "nexora.test", "softwaresamee", "A", "-P"]
+# 2. Query all existing A records for DC hostname in nexora.test
+dc_hostname = socket.gethostname().lower()
+query_cmd = ["samba-tool", "dns", "query", "127.0.0.1", "nexora.test", dc_hostname, "A", "-P"]
 q_res = subprocess.run(query_cmd, capture_output=True, text=True)
 if q_res.returncode != 0:
     print(f"[ERROR] DNS query failed (code {q_res.returncode}): {q_res.stderr}", file=sys.stderr)
     sys.exit(1)
 
 registered_ips = re.findall(r"A:\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)", q_res.stdout)
-print(f"[INFO] Registered A records for softwaresamee: {registered_ips}")
+print(f"[INFO] Registered A records for {dc_hostname}: {registered_ips}")
 
 if not registered_ips:
-    print("[ERROR] DNS query returned zero A records for softwaresamee.nexora.test", file=sys.stderr)
+    print(f"[ERROR] DNS query returned zero A records for {dc_hostname}.nexora.test", file=sys.stderr)
     sys.exit(1)
 
 # 3. Purge stale records with verified command return code (fail-closed on error)
 for ip in registered_ips:
     if ip != dc_ip:
-        print(f"[PURGE] Removing stale DNS A record: softwaresamee -> {ip}")
-        del_cmd = ["samba-tool", "dns", "delete", "127.0.0.1", "nexora.test", "softwaresamee", "A", ip, "-P"]
+        print(f"[PURGE] Removing stale DNS A record: {dc_hostname} -> {ip}")
+        del_cmd = ["samba-tool", "dns", "delete", "127.0.0.1", "nexora.test", dc_hostname, "A", ip, "-P"]
         del_res = subprocess.run(del_cmd, capture_output=True, text=True)
         if del_res.returncode != 0:
             print(f"[ERROR] Failed to delete stale DNS A record {ip} (code {del_res.returncode}): {del_res.stderr}", file=sys.stderr)
@@ -625,7 +626,7 @@ if set(final_ips) != {dc_ip}:
     print(f"[SECURITY FAILURE] Stale DNS records remain: {final_ips} (expected strictly [{dc_ip}])", file=sys.stderr)
     sys.exit(1)
 
-print(f"[OK] DNS A-record hygiene verified: softwaresamee.nexora.test resolves exclusively to live DC IP {dc_ip}.")
+print(f"[OK] DNS A-record hygiene verified: {dc_hostname}.nexora.test resolves exclusively to live DC IP {dc_ip}.")
 PY_DNS
     """
     res = run_wsl_cmd(dns_cleanup_script)

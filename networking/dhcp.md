@@ -1,6 +1,6 @@
 # Dynamic Host Configuration Protocol (DHCP) Troubleshooting Guide
-**Document ID:** NET-003  
-**Audience:** L1 Support Engineers / Service Desk Analysts  
+**Document ID:** NET-003
+**Audience:** L1 Support Engineers / Service Desk Analysts
 **Protocol:** UDP Port 67 (Server) / UDP Port 68 (Client)
 
 ---
@@ -25,7 +25,7 @@ Client (Port 68)                                                DHCP Server (Por
 ### Essential DHCP Options Delivered to Client:
 - **Option 3:** Router / Default Gateway IP (`192.168.10.1`).
 - **Option 6:** Domain Name Servers (`192.168.20.10`).
-- **Option 15:** Domain Name suffix (`nexora.local`).
+- **Option 15:** Domain Name suffix (`nexora.test`).
 - **Option 51:** IP Address Lease Time (e.g., 8 days for wired LAN, 8 hours for guest Wi-Fi).
 
 ---
@@ -33,7 +33,7 @@ Client (Port 68)                                                DHCP Server (Por
 ## 2. The APIPA Signature: 169.254.x.x
 
 When a Windows client sends a DHCP Discover broadcast but receives **NO response** within approximately 60 seconds:
-- Windows automatically assigns an address from the **Automatic Private IP Addressing (APIPA)** range:  
+- Windows automatically assigns an address from the **Automatic Private IP Addressing (APIPA)** range:
   **`169.254.0.1` to `169.254.255.254`** with subnet mask `255.255.0.0` (RFC 3927).
 
 ### What Seeing 169.254.x.x Means to an L1 Engineer:
@@ -66,12 +66,12 @@ ipconfig /release
 ipconfig /renew
 ```
 
-*Expected Success Output:*  
-Connection-specific DNS Suffix: `nexora.local`  
-IPv4 Address: `192.168.10.52`  
-Subnet Mask: `255.255.255.0`  
+*Expected Success Output:*
+Connection-specific DNS Suffix: `nexora.test`
+IPv4 Address: `192.168.10.52`
+Subnet Mask: `255.255.255.0`
 Default Gateway: `192.168.10.1`
 
-*Failure Output:*  
-`An error occurred while renewing interface Ethernet : unable to contact your DHCP server. Request has timed out.`  
+*Failure Output:*
+`An error occurred while renewing interface Ethernet : unable to contact your DHCP server. Request has timed out.`
 *(Confirms Layer 2 switch port VLAN misconfiguration or DHCP server failure).*

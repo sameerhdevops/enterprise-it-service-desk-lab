@@ -19,7 +19,7 @@
   Classic Teams Cache:  ABSENT
 
 [4. Microsoft OneDrive Process & Sync Directory State]
-  Process State:      RUNNING (PID: 3760)
+  Process State:      RUNNING (Process detected; sync state unverified)
   Local Sync Path:    PRESENT (%USERPROFILE%\OneDrive - Process active; sync state unverified)
 
 [5. Microsoft 365 Cloud Endpoint TCP Socket Reachability (Port 443)]

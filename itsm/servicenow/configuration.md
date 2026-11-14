@@ -11,11 +11,11 @@ In ServiceNow, navigate to **User Administration > Groups** (`sys_user_group.lis
 
 | Group Name | Group Email | Roles | Description & Scope |
 |---|---|---|---|
-| **L1 Service Desk** | `servicedesk@nexora.local` | `itil` | First-line intake, triage, initial diagnosis, password resets, basic software support. |
-| **L2 Desktop Support** | `desktop-support@nexora.local` | `itil` | Onsite hardware repair, OS reimaging, advanced client crashes, physical peripherals. |
-| **L2 Network Support** | `network-support@nexora.local` | `itil`, `network` | Switch ports, Wi-Fi APs, VPN gateway policies, firewall rules, DHCP/DNS infrastructure. |
-| **L2 Application Support** | `app-support@nexora.local` | `itil` | Enterprise applications (SAP GUI, accounting software, custom internal tools). |
-| **L3 Infrastructure** | `infra-team@nexora.local` | `itil`, `admin` | Domain controllers, hypervisors, SAN/NAS storage, cloud infrastructure. |
+| **L1 Service Desk** | `servicedesk@nexora.test` | `itil` | First-line intake, triage, initial diagnosis, password resets, basic software support. |
+| **L2 Desktop Support** | `desktop-support@nexora.test` | `itil` | Onsite hardware repair, OS reimaging, advanced client crashes, physical peripherals. |
+| **L2 Network Support** | `network-support@nexora.test` | `itil`, `network` | Switch ports, Wi-Fi APs, VPN gateway policies, firewall rules, DHCP/DNS infrastructure. |
+| **L2 Application Support** | `app-support@nexora.test` | `itil` | Enterprise applications (SAP GUI, accounting software, custom internal tools). |
+| **L3 Infrastructure** | `infra-team@nexora.test` | `itil`, `admin` | Domain controllers, hypervisors, SAN/NAS storage, cloud infrastructure. |
 
 ---
 

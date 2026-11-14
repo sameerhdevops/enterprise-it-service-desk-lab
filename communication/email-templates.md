@@ -134,19 +134,19 @@ Best regards,
 ---
 
 ## Template 7: Scheduled Maintenance Notification
-**Subject:** [IT NOTIFICATION] Scheduled Maintenance: Server OS Patching - Saturday, Nov 16
+**Subject:** [IT NOTIFICATION] Scheduled Maintenance: Server OS Patching - Saturday, Nov 9
 
 Dear Nexora Team,
 
 Please be advised that the IT Infrastructure Team will perform routine monthly security patching and server maintenance this weekend.
 
 **Maintenance Window:**
-- **Start Time:** Saturday, 16 November 2024 at 23:00 IST
-- **End Time:** Sunday, 17 November 2024 at 03:00 IST
+- **Start Time:** Saturday, 9 November 2024 at 23:00 IST
+- **End Time:** Sunday, 10 November 2024 at 02:30 IST
 - **Change Reference:** CHG0001 (Approved Standard Maintenance)
 
 **Expected Service Impact:**
-- During this 4-hour window, the primary file server (`\\nexfs01`) and corporate intranet portal will experience intermittent downtime lasting approximately 15–20 minutes as servers reboot.
+- During this window, the primary file server (`\\nexfs01`) and corporate intranet portal will experience intermittent downtime lasting approximately 15–20 minutes as servers reboot sequentially.
 - Cloud services, including Microsoft 365, Exchange Email, and Teams, will remain 100% available and unaffected.
 
 **Action Required:**  
@@ -174,8 +174,8 @@ The IT Service Desk has prepared your corporate workstation and user account. Be
 - **Accessories:** USB-C Power Adapter, Laptop Sleeve, Wireless Mouse, Security Cable.
 
 **2. Your Login Credentials:**
-- **Domain Username:** `{Username}` (or `{Username}@nexora.local`)
-- **Corporate Email:** `{Username}@nexora.com`
+- **Domain Username:** `{Username}` (or `{Username}@nexora.test`)
+- **Corporate Email:** `{Username}@nexora.test`
 - **Temporary Password:** Provided separately via secure SMS / in-person handover.
 
 **3. First-Time Setup Instructions:**
@@ -186,7 +186,7 @@ The IT Service Desk has prepared your corporate workstation and user account. Be
 5. Open Outlook and Teams; your email and profile will synchronize automatically.
 
 **Need Help?**  
-The IT Service Desk is located on Floor 2 (IT Operations Room). You can reach us at Extension **4100** or via email at `servicedesk@nexora.local`.
+The IT Service Desk is located on Floor 2 (IT Operations Room). You can reach us at Extension **4100** or via email at `servicedesk@nexora.test`.
 
 Wishing you a fantastic start at Nexora!
 

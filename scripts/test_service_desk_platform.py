@@ -139,7 +139,7 @@ def run_tests():
         print(msg)
         log_lines.append(msg)
 
-    log(f"[INIT] Server running on {TEST_HOST}:{TEST_PORT} using isolated DB: {test_db}")
+    log(f"[INIT] Server running on {TEST_HOST}:{TEST_PORT} using isolated DB: <TEMP_DIR>\\{os.path.basename(test_db)}")
     log(f"[INIT] Dynamic agent credentials generated (no hardcoded credentials in source)")
 
     try:
@@ -185,7 +185,7 @@ def run_tests():
         cookie_header = headers.get("Set-Cookie", "")
         assert "SameSite=Strict" in cookie_header, "Missing SameSite=Strict cookie"
         assert "HttpOnly" in cookie_header, "Missing HttpOnly cookie"
-        log(f"[TEST 3] Authentication Gate: Validated PBKDF2 hash, issued session token ({session_token[:8]}...). [PASS]")
+        log("[TEST 3] Authentication Gate: Validated PBKDF2 hash, issued session token (REDACTED_SESSION_TOKEN...). [PASS]")
 
         # Test 4: Authenticated Queue Retrieval
         code, tickets_res = http_get(f"{base_url}/api/tickets", headers=auth_headers)
@@ -551,7 +551,13 @@ def run_tests():
         assert compound_xss in fetched_xss["ticket"]["description"]
 
         # 14c. Headless browser verification using Playwright (Mandatory Release Gate)
-        from playwright.sync_api import sync_playwright
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            raise RuntimeError(
+                "Playwright is required for Test 14 (browser UI & XSS test). "
+                "Install testing requirements with: pip install -r requirements-test.txt && python -m playwright install chromium"
+            )
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
@@ -764,7 +770,7 @@ def run_tests():
         # 17c. Strict Windows ACL / POSIX permission verification on generated credentials file
         assert os.path.exists(mig_creds), "Migrated credentials file not created"
         service_desk_app.verify_local_file_permissions(mig_creds)
-        log(f"  - Strict Permissions Verification: Verified fail-closed permissions (SIDs / mode 0600) on {mig_creds}. [PASS]")
+        log(f"  - Strict Permissions Verification: Verified fail-closed permissions (SIDs / mode 0600) on <TEMP_DIR>\\{os.path.basename(mig_creds)}. [PASS]")
 
         # 17d. Test ACL negative test cases (reject unexpected principals and inherited permissions)
         if os.name == "nt":

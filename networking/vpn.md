@@ -45,7 +45,7 @@ When employees work from home or travel, a Remote Access VPN creates an encrypte
    - Locate virtual adapter (e.g., "Palo Alto Networks Virtual Adapter").
    - Ensure an IP from the VPN pool (e.g., `172.16.50.x`) and corporate DNS servers (`192.168.20.10`) are assigned.
 2. **Check DNS Suffix Search List:**
-   - If user can ping internal server by IP (`ping 192.168.20.15`), but fails by name (`ping nexfs01`), test with Full Qualified Domain Name (FQDN): `ping nexfs01.nexora.local`.
+   - If user can ping internal server by IP (`ping 192.168.20.15`), but fails by name (`ping nexfs01`), test with Full Qualified Domain Name (FQDN): `ping nexfs01.nexora.test`.
    - If FQDN works, append connection-specific DNS suffix in adapter properties.
 3. **Inspect Routing Table:**
    - Run `route print` to verify routes for `192.168.0.0/16` point to the VPN virtual gateway.

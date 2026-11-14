@@ -48,7 +48,7 @@
 ### Verification
 - Confirm network icon in taskbar displays standard connected icon without warnings.
 - Run `ping 8.8.8.8 -n 4` with 0% packet loss.
-- Navigate to company intranet portal (`https://intranet.nexora.local`) in Edge.
+- Navigate to company intranet portal (`https://intranet.nexora.test`) in Edge.
 
 ### Escalation Instructions
 - If ping to Default Gateway fails across multiple adjacent workstations on the floor, escalate immediately as a **P1/P2 Major Incident** to **L2 Network Support** (Floor switch or uplink down).

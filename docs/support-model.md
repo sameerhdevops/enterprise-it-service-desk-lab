@@ -41,7 +41,7 @@ Nexora employees can reach IT support through three channels:
 - **Target response**: Acknowledgement within 1 business hour.
 
 ### 2. Email
-- **Address**: support@nexora.tech (fictional)
+- **Address**: support@nexora.test (fictional)
 - **How it works**: Email hits a shared inbox monitored by IT. L1 creates a ticket from the email and responds with the ticket number.
 - **Best for**: Detailed issue descriptions, attaching screenshots, follow-ups on existing tickets.
 - **Target response**: Acknowledgement within 1 business hour.

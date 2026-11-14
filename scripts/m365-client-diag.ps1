@@ -99,5 +99,5 @@ $fullReport = $output -join "`r`n"
 Write-Output $fullReport
 
 # Save to evidence
-$evidencePath = "D:\Projects\enterprise-it-service-desk-lab\evidence\microsoft-365\m365-client-diagnostics-output.txt"
+$evidencePath = Join-Path $PSScriptRoot "..\evidence\microsoft-365\m365-client-diagnostics-output.txt"
 $fullReport | Out-File -FilePath $evidencePath -Encoding utf8

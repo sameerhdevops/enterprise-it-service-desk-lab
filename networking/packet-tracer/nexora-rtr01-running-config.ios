@@ -29,10 +29,9 @@ ip ssh authentication-retries 3
 no aaa new-model
 !
 ! IP DHCP Pool Configuration (Router-Managed DHCP Architecture)
-! Note: DHCP is handled locally by NEX-RTR01 for VLAN 10 and VLAN 20.
+! Note: DHCP is handled locally by NEX-RTR01 for VLAN 10.
 ! Conflicting 'ip helper-address' relay statements have been omitted from Gi0/1.10.
 ip dhcp excluded-address 192.168.10.1 192.168.10.20
-ip dhcp excluded-address 192.168.20.1 192.168.20.20
 !
 ip dhcp pool VLAN10_CORP_USERS
  network 192.168.10.0 255.255.255.0
@@ -41,11 +40,8 @@ ip dhcp pool VLAN10_CORP_USERS
  domain-name nexora.test
  lease 7
 !
-ip dhcp pool VLAN20_SERVERS
- network 192.168.20.0 255.255.255.0
- default-router 192.168.20.1 
- dns-server 192.168.20.10 
- domain-name nexora.test
+! Server Farm (VLAN 20) uses static IP addressing exclusively.
+! No DHCP pool is configured for VLAN 20.
 !
 ! Interfaces
 ! WAN Uplink to Primary ISP

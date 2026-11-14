@@ -1,0 +1,3 @@
+# Testing Dependencies for Automated Integration & Browser Tests
+# Required for Test Module 14 in scripts/test_service_desk_platform.py (Playwright Headless Browser UI & Stored XSS Verification Gate)
+playwright>=1.40.0

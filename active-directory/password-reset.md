@@ -24,7 +24,7 @@
 3. Right-click the user account > select **Reset Password...**
 4. Enter a temporary password conforming to Nexora's password complexity policy:
    - Minimum 12 characters.
-   - At least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 symbol (e.g., `Nexora#Nov2024!`).
+   - At least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 symbol (e.g., `<TEMPORARY_PASSWORD>`).
 5. **CHECK:** **"User must change password at next logon"**.
 6. **UNCHECK:** **"Account is locked out"** (if the user was locked out, this unfreezes the account simultaneously).
 7. Communicate the temporary password securely to the user via phone or encrypted SMS (never email it to an unverified address).
@@ -35,7 +35,7 @@
 
 ```powershell
 # Reset password and require change on next logon
-$TempPassword = ConvertTo-SecureString "Nexora#Nov2024!" -AsPlainText -Force
+$TempPassword = ConvertTo-SecureString "<TEMPORARY_PASSWORD>" -AsPlainText -Force
 Set-ADAccountPassword -Identity "kmurthy" -NewPassword $TempPassword -Reset
 Set-ADUser -Identity "kmurthy" -ChangePasswordAtLogon $true
 Unlock-ADAccount -Identity "kmurthy"

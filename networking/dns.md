@@ -20,7 +20,7 @@ When an employee types `portal.nexora.com` into their browser:
 1. **Client Cache Check:** Windows checks its local memory cache (`ipconfig /displaydns`) and `C:\Windows\System32\drivers\etc\hosts`.
 2. **Recursive Query to Local DNS:** Workstation queries corporate DNS server (`192.168.20.10`).
 3. **Internal vs External Lookup:**
-   - If querying an internal domain resource (`nexfs01.nexora.local`), the internal Domain Controller returns the private IP (`192.168.20.15`).
+   - If querying an internal domain resource (`nexfs01.nexora.test`), the internal Domain Controller returns the private IP (`192.168.20.15`).
    - If querying a public domain (`google.com`), the corporate DNS server queries external Root hints, TLD servers, and authoritative nameservers on the user's behalf (or forwards to ISP DNS / `8.8.8.8`).
 
 ---
@@ -42,21 +42,21 @@ The definitive test to determine if a network failure is caused by DNS:
 
 ### Standard Query:
 ```cmd
-nslookup intranet.nexora.local
+nslookup intranet.nexora.test
 ```
 *Expected Output:*
 ```
-Server:  nex-dc01.nexora.local
+Server:  nex-dc01.nexora.test
 Address:  192.168.20.10
 
-Name:    intranet.nexora.local
+Name:    intranet.nexora.test
 Address:  192.168.20.50
 ```
 
 ### Testing Against an Alternate DNS Server:
 Bypasses local DNS to verify if the issue is with the local server:
 ```cmd
-nslookup intranet.nexora.local 192.168.20.10
+nslookup intranet.nexora.test 192.168.20.10
 nslookup www.google.com 8.8.8.8
 ```
 

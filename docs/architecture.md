@@ -11,7 +11,7 @@ flowchart TD
     E["Nexora Employees (~25)"]
 
     E --> P["Self-Service Portal\n(ServiceNow / Jira)"]
-    E --> EM["Email\n(support@nexora.tech)"]
+    E --> EM["Email\n(support@nexora.test)"]
     E --> PH["Phone\n(Internal Extension)"]
 
     P --> SD["Service Desk\nTicket Created & Triaged"]
@@ -70,8 +70,8 @@ flowchart LR
     SCRIPTS -.->|Supports| AD
     SCRIPTS -.->|Supports| REP
 
-    INTERVIEW["interview-preparation/\nScenarios become\ninterview examples"]
-    INC -.->|Feeds| INTERVIEW
+    DOCS["docs/\nWalkthrough & Scope\nVerification"]
+    INC -.->|Feeds| DOCS
 ```
 
 The key insight: **incidents are the center of gravity**. Almost everything flows from or into a support incident. That's why the `incidents/` module connects to nearly everything else.
@@ -82,16 +82,22 @@ Different modules use different tools. Here's what covers what:
 
 ```mermaid
 flowchart TD
-    subgraph Cloud["Cloud / Web Services"]
-        SN["ServiceNow PDI"]
-        JIRA["Jira Service\nManagement"]
+    subgraph Deployed["Local Running Services"]
+        PORTAL["Python Service Desk\n(itsm/portal/app.py)"]
+        SAMBA["Samba 4 AD DC\n(WSL2 Ubuntu)"]
+    end
+
+    subgraph Reference["Reference Blueprints & Designs"]
+        SN["ServiceNow Blueprint\n(itsm/servicenow/)"]
+        JIRA["Jira SM Blueprint\n(itsm/jira-service-management/)"]
+        PT["Cisco Network Design\n(networking/packet-tracer/)"]
     end
 
     subgraph Local["Local Tools"]
         PS["PowerShell 5.1"]
         PY["Python 3.14\n(stdlib only)"]
-        GIT["Git 2.55.0"]
-        PT["Cisco Packet\nTracer"]
+        GIT["Git"]
+        TSHARK["Wireshark / TShark"]
     end
 
     subgraph Modules["Lab Modules"]
@@ -107,8 +113,10 @@ flowchart TD
         SCRIPTS_M["scripts/"]
     end
 
-    SN --> ITSM_M
-    JIRA --> ITSM_M
+    PORTAL --> ITSM_M
+    SN -.-> ITSM_M
+    JIRA -.-> ITSM_M
+    SAMBA --> AD_M
 
     PS --> WIN_M
     PS --> AD_M
@@ -116,21 +124,26 @@ flowchart TD
 
     PY --> REP_M
     PY --> SCRIPTS_M
+    PY --> PORTAL
 
-    PT --> NET_M
+    PT -.-> NET_M
+    TSHARK --> NET_M
 
     GIT --> |"Version control\nfor everything"| Modules
 ```
 
 ### Tool Selection Summary
 
-| Need | Tool | Rationale |
-|------|------|-----------|
-| Ticket management | ServiceNow PDI + Jira SM | Industry standard platforms, both free for learning |
-| Network simulation | Cisco Packet Tracer | Free, widely used in CCNA training, good enough for L1 concepts |
-| Windows admin | PowerShell 5.1 | Built into every Windows machine, essential IT support skill |
-| Reporting & data | Python 3.14 (stdlib) | csv + json modules handle everything; no external dependencies |
-| Version control | Git 2.55.0 | Track all changes, demonstrate progression |
-| Documentation | Markdown files | Plain text, diffs well, renders on GitHub |
+| Need | Tool | Implementation & Rationale |
+|------|------|----------------------------|
+| Interactive Service Desk | Python stdlib (`http.server` + `sqlite3`) | Real local interactive web portal at `localhost:8080` with queues, agent console, and customer tracking. Zero external dependencies. |
+| Enterprise ITSM Design | ServiceNow & Jira SM Runbooks | Documented reference blueprints, field dictionaries, SLA definitions, and configuration runbooks in `itsm/`. |
+| Directory Services | Samba 4 AD DC (WSL2 Ubuntu) | Real local Active Directory domain controller (`nexora.test`) providing LDAP, Kerberos, AGDLP group nesting, and SMB share testing without heavy VM resource usage. |
+| Network Analysis | Wireshark / TShark | Packet analysis using a 20-frame loopback `.pcap` capture and TShark display filters. |
+| Network Design | Cisco IOS Running Configs | Syntax-accurate Cisco 2911 router and 2960 switch configuration drafts and topology documentation in `networking/packet-tracer/`. |
+| Windows Admin | PowerShell 5.1 | Built into Windows; runbooks for desktop troubleshooting, client diagnostics, and automated audits. |
+| Reporting & Validation | Python 3.14 (stdlib) | Native CSV and JSON processing for MTTR, SLA calculations, and schema verification; 13/13 passing unit tests. |
+| Version Control | Git | Tracking all iterations, code, and documentation cleanly. |
+| Documentation | Markdown files | Plain text, clean diffs, and readable directly on GitHub. |
 
 Full rationale for each choice is in [design-decisions.md](design-decisions.md).

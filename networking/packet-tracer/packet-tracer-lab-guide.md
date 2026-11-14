@@ -4,7 +4,7 @@
 **Network Architecture:** Router-on-a-Stick (802.1Q Inter-VLAN Routing, Subinterfaces, PAT, Port Security)  
 **Gateway Router:** Cisco 2911 Integrated Services Router (`NEX-RTR01`)  
 **Floor Switch:** Cisco Catalyst 2960-24TT Switch (`SW-CORE-01`)  
-**Implementation Status:** **IMPLEMENTED & VERIFIED** (Cisco IOS running configurations & architectural design) | **DOCUMENTED / REFERENCE** (Packet Tracer simulation guide)
+**Implementation Status:** **DOCUMENTED / REFERENCE** (Cisco IOS reference configurations & architectural design guide)
 
 ---
 
@@ -81,7 +81,7 @@
 > There is **no binary `.pkt` file** in this repository. All Cisco IOS configuration files (`nexora-rtr01-running-config.ios` and `nexora-sw01-running-config.ios`) are classified as **Implemented Configuration Artifacts**, and this deployment walkthrough is classified as **Documented Reference Material**. They provide genuine, syntax-verified Cisco IOS configurations ready to paste directly into Cisco Packet Tracer or physical lab hardware.
 
 ### Router Configuration (`NEX-RTR01`)
-File: [networking/packet-tracer/nexora-rtr01-running-config.ios](file:///d:/Projects/enterprise-it-service-desk-lab/networking/packet-tracer/nexora-rtr01-running-config.ios)
+File: [nexora-rtr01-running-config.ios](nexora-rtr01-running-config.ios)
 
 To apply in Packet Tracer or hardware terminal:
 ```cisco
@@ -94,7 +94,7 @@ Router# copy running-config startup-config
 ```
 
 ### Switch Configuration (`SW-CORE-01`)
-File: [networking/packet-tracer/nexora-sw01-running-config.ios](file:///d:/Projects/enterprise-it-service-desk-lab/networking/packet-tracer/nexora-sw01-running-config.ios)
+File: [nexora-sw01-running-config.ios](nexora-sw01-running-config.ios)
 
 To apply in Packet Tracer or hardware terminal:
 ```cisco

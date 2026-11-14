@@ -77,6 +77,32 @@ tracert -d 8.8.8.8
 
 ### Step 5: Test Port Connectivity with PowerShell
 ```powershell
-Test-NetConnection -ComputerName "intranet.nexora.local" -Port 443
+Test-NetConnection -ComputerName "intranet.nexora.test" -Port 443
 ```
 *Interpretation:* Tests both DNS resolution and TCP handshake on HTTPS port 443 in a single command.
+
+---
+
+## 3. Diagnostic Boundaries & Tool Limitations
+
+When troubleshooting in an enterprise environment or explaining diagnostic steps in an interview, understand what each tool does and does not prove:
+
+1. **APIPA (169.254.x.x):**
+   - Indicates Windows attempted DHCP discovery but received no DHCP Offer within the timeout period.
+   - **Limitation:** APIPA alone does *not* prove a healthy physical or data-link connection. A damaged cable or misconfigured switch port (e.g., wrong VLAN or blocked broadcast domain) can still cause APIPA.
+
+2. **Ping (ICMP Echo):**
+   - Confirms bidirectional Layer 3 IP reachability to the target IP address.
+   - **Limitation:** Pinging `8.8.8.8` proves only that outbound and return ICMP packets traverse the gateway and ISP link. It does *not* prove that DNS is resolving names, that web traffic (TCP 443) is permitted through the corporate proxy/firewall, or that cloud applications are healthy.
+
+3. **DNS Testing (`nslookup` / `Resolve-DnsName`):**
+   - Testing TCP port 53 using `Test-NetConnection` confirms only that a TCP socket opens to the nameserver. It does *not* execute a real DNS query.
+   - A true DNS diagnostic requires sending an actual DNS query (UDP/TCP 53) with `nslookup <hostname>` or `Resolve-DnsName <hostname>` to verify that the server returns valid A/AAAA/CNAME records.
+
+4. **Tracert (Traceroute):**
+   - Identifies the hop-by-hop path packets take using incrementing ICMP Time-To-Live (TTL) values.
+   - **Limitation:** Many enterprise core routers and ISP carrier backbones drop or de-prioritize ICMP TTL-expired generation for security and CPU protection. An asterisk (`* * *`) on a single intermediate hop does not indicate packet loss if subsequent hops respond.
+
+5. **Test-NetConnection:**
+   - Verifies whether a TCP 3-way handshake completes on a specific port (e.g., port 443, 445, or 3389).
+   - **Limitation:** A successful TCP connection proves network routing and firewall port access, but does not verify application-layer authentication, TLS certificate trust, or service responsiveness.

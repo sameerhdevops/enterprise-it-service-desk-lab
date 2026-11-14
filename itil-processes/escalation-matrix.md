@@ -67,10 +67,10 @@ Escalate when **any** of these conditions are met:
 
 | Team | Lead (Fictional) | Contact | Handles |
 |------|------------------|---------|---------|
-| **Systems Team** | Deepak Nair | deepak.nair@nexora.tech / ext. 2201 | Server, AD, GPO, SCCM/Intune, backup/recovery |
-| **Network Engineering** | Arjun Mehta | arjun.mehta@nexora.tech / ext. 2202 | Switches, routers, firewalls, VPN concentrator, Wi-Fi |
-| **Application Support** | Sneha Desai | sneha.desai@nexora.tech / ext. 2203 | Business applications, database connectivity, integrations |
-| **Security Team** | Vikram Joshi | vikram.joshi@nexora.tech / ext. 2204 | Security incidents, access review, vulnerability management |
+| **Systems Team** | Deepak Nair | deepak.nair@nexora.test / ext. 2201 | Server, AD, GPO, SCCM/Intune, backup/recovery |
+| **Network Engineering** | Arjun Mehta | arjun.mehta@nexora.test / ext. 2202 | Switches, routers, firewalls, VPN concentrator, Wi-Fi |
+| **Application Support** | Sneha Desai | sneha.desai@nexora.test / ext. 2203 | Business applications, database connectivity, integrations |
+| **Security Team** | Vikram Joshi | vikram.joshi@nexora.test / ext. 2204 | Security incidents, access review, vulnerability management |
 
 ## Hierarchical Escalation Path
 
@@ -91,10 +91,10 @@ Escalate when **any** of these conditions are met:
 
 | Level | Name (Fictional) | Title | Contact | Escalate For |
 |-------|------------------|-------|---------|-------------|
-| 1 | Ananya Rao | Service Desk Lead | ananya.rao@nexora.tech / ext. 2100 | SLA warnings, workload issues, user complaints, P2+ awareness |
-| 2 | Ramesh Iyer | IT Manager | ramesh.iyer@nexora.tech / ext. 2001 | SLA breaches, P1 incidents, resource conflicts, cross-team coordination |
-| 3 | Suresh Venkat | CTO | suresh.venkat@nexora.tech / ext. 1001 | Extended P1 outages, security incidents, business-impacting decisions |
-| 4 | Nadia Fernandez | CEO | nadia.fernandez@nexora.tech / ext. 1000 | Only for company-wide impact or regulatory/legal implications |
+| 1 | Ananya Rao | Service Desk Lead | ananya.rao@nexora.test / ext. 2100 | SLA warnings, workload issues, user complaints, P2+ awareness |
+| 2 | Ramesh Iyer | IT Manager | ramesh.iyer@nexora.test / ext. 2001 | SLA breaches, P1 incidents, resource conflicts, cross-team coordination |
+| 3 | Suresh Venkat | CTO | suresh.venkat@nexora.test / ext. 1001 | Extended P1 outages, security incidents, business-impacting decisions |
+| 4 | Nadia Fernandez | CEO | nadia.fernandez@nexora.test / ext. 1000 | Only for company-wide impact or regulatory/legal implications |
 
 ## Escalation Procedure
 

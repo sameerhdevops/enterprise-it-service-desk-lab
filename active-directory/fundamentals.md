@@ -13,16 +13,16 @@ Active Directory Domain Services (AD DS) is Microsoft's directory service and id
 - **Security Groups:** Access control lists for shared folders, applications, and VPNs.
 - **Group Policy Objects (GPOs):** Automated system and security configuration pushed across thousands of machines.
 
-In a domain environment, users do not have separate local accounts on each machine. Instead, they authenticate against a centralized **Domain Controller (DC)** using their domain credentials (e.g., `NEXORA\kmurthy` or `kmurthy@nexora.local`).
+In a domain environment, users do not have separate local accounts on each machine. Instead, they authenticate against a centralized **Domain Controller (DC)** using their domain credentials (e.g., `NEXORA\kmurthy` or `kmurthy@nexora.test`).
 
 ---
 
 ## 2. Nexora Technologies Domain Architecture
 
 ```
-Forest: nexora.local
+Forest: nexora.test
   │
-  └── Domain: nexora.local
+  └── Domain: nexora.test
         │
         ├── Domain Controllers:
         │     ├── NEX-DC01 (Primary Domain Controller & DNS - 192.168.20.10)

@@ -1,98 +1,67 @@
-# Lab Environment Details
+# Lab Environment Setup & Prerequisites
 
-## Hardware
+This document outlines the system requirements, software prerequisites, and architectural design choices for running and testing the IT Support & Service Desk Lab.
 
-| Component | Specification |
-|-----------|--------------|
-| **Processor** | Intel Core i5-1035G1 (10th Gen Ice Lake) — 4 cores / 8 threads, 1.0 GHz base / 3.6 GHz turbo |
-| **Memory** | 16 GB DDR4 |
-| **Storage** | 512 GB SSD (D: drive has ~191 GB free) |
-| **Form Factor** | Laptop |
+---
 
-This is a consumer-grade laptop, not a lab server. It works fine for what I'm doing — running local tools, Packet Tracer simulations, and lightweight scripting. It would struggle with multiple VMs running simultaneously, which is why I've made certain design choices around that (see below).
+## 1. System Requirements
 
-## Operating System
+The lab is designed to run efficiently on standard consumer or office hardware without requiring dedicated enterprise servers or paid cloud subscriptions:
 
-| Detail | Value |
-|--------|-------|
-| **OS** | Windows 11 Enterprise |
-| **Build** | 26300 |
+- **Host Operating System:** Windows 10 / 11 (64-bit). Linux and macOS can also run the core Python web application, reporting engine, and CSV validation scripts.
+- **Memory (RAM):** 8 GB minimum recommended (16 GB provides ample headroom when running WSL2 and browser sessions simultaneously).
+- **Storage:** ~1 GB of available disk space for the repository, SQLite databases, and virtual environment dependencies.
+- **Privileges:** Standard user access is sufficient for running the core web portal and reporting scripts. Administrator privileges are required only when testing certain local Windows diagnostic runbooks or managing local firewall rules.
 
-Windows 11 Enterprise gives access to features like BitLocker, Group Policy Editor, and Hyper-V that the Home edition doesn't include. That matters for this lab because those are tools you'd encounter in a real corporate environment.
+---
 
-## Installed Software & Tools
+## 2. Software Prerequisites
 
-### Core Tools
+### Core Application & Reporting (Zero External Dependencies)
+- **Python 3.10 or higher:** Used for the Service Desk web application (`itsm/portal/app.py`), the reporting generator (`reporting/report-generator.py`), and dataset validation (`scripts/validate-data.py`).
+- **Standard Library Only:** The production application and reporting engine use built-in Python standard library modules (`http.server`, `sqlite3`, `csv`, `json`, `datetime`, `urllib`, `hashlib`, `hmac`, `secrets`). No external `pip` packages are needed to run the service desk portal or generate reports.
 
-| Tool | Version | Purpose in This Lab |
-|------|---------|-------------------|
-| **Python** | 3.14.7 | Reporting scripts, data processing. Using stdlib only (csv, json, os, datetime) — no pip dependencies. |
-| **Git** | 2.55.0 | Version control for the entire lab. Every change is tracked. |
-| **PowerShell** | 5.1 (built-in) | Windows administration, system info gathering, automation scripts |
-| **Windows Terminal** | (bundled with Windows 11) | Primary terminal for PowerShell and WSL access |
+### Automated Testing Suite (Optional Test Dependencies)
+- **Playwright:** The browser UI integration test and stored-XSS verification gate (Module 14 in `scripts/test_service_desk_platform.py`) uses Playwright with headless Chromium.
+- **Installation:**
+  ```powershell
+  pip install -r requirements-test.txt
+  python -m playwright install chromium
+  ```
 
-### ITSM Platforms (Cloud/Web)
+### Active Directory & Packet Capture (WSL2 Prerequisites)
+- **Windows Subsystem for Linux (WSL2):** Ubuntu 22.04 LTS or 24.04 LTS.
+- **Samba 4 & Kerberos:** Used to host the isolated local Active Directory Domain Controller (`nexora.test`) via `scripts/deploy_samba_ad.py`.
+- **Packet Analysis Tools:** `tcpdump` and `tshark` (Wireshark CLI) on Linux/WSL2 for capturing and analyzing local loopback protocol traffic.
 
-| Platform | Access Method |
-|----------|--------------|
-| **ServiceNow** | Personal Developer Instance (PDI) — free, browser-based, resets periodically |
-| **Jira Service Management** | Free tier — up to 3 agents, browser-based |
+### Windows Support & Troubleshooting
+- **PowerShell 5.1 or PowerShell 7+:** Used for Windows endpoint support runbooks, local SAM user management labs, and client diagnostic scripts.
 
-These aren't installed locally — they're cloud services accessed through the browser. Configuration and evidence (screenshots, export data) are saved in `itsm/`.
+---
 
-### Simulation & Networking
+## 3. Architecture & Design Choices
 
-| Tool | Purpose |
-|------|---------|
-| **Cisco Packet Tracer** | Network topology design and simulation (VLANs, DNS, DHCP, routing basics) |
+### Why Lightweight Local Components Instead of Heavy Server VMs
+In commercial enterprise environments, Active Directory runs on dedicated Windows Server virtual machines, and Service Desk platforms run on dedicated cloud SaaS instances (such as ServiceNow or Jira Service Management). For an independent learning lab, this project utilizes intentional, resource-conscious alternatives:
 
-### Virtualisation (Available but Limited)
+1. **Self-Contained Python Service Desk:** Built using native Python `http.server` and SQLite. This delivers a working, testable L1 ticket management platform with customer and agent portals, RBAC, SLA timers, and REST APIs without needing Docker containers or enterprise database servers.
+2. **Samba 4 AD DC in WSL2:** Provides an authentic, standards-compliant Active Directory Domain Controller (`nexora.test`) supporting Kerberos authentication, LDAP queries, AGDLP group nesting, and SMB network shares while consuming a fraction of the RAM and CPU required by a full Windows Server VM.
+3. **Reference Blueprints for Enterprise Platforms:** Workflows for enterprise platforms (ServiceNow, Jira Service Management, Cisco IOS router/switch configurations, Microsoft 365) are documented as comprehensive reference architectures and standard operating procedures.
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| **WSL2** | Installed, Ubuntu distribution | Currently stopped. Available for Linux-side testing if needed. |
-| **Docker Desktop** | Installed | Currently stopped. Not actively used in the lab — most work is native Windows. |
-| **Hyper-V** | Available via Windows 11 Enterprise | Not currently running VMs (see resource constraints below). |
+---
 
-## Resource Constraints
+## 4. Verification & Testing Quickstart
 
-### Why No Windows Server VM
+```powershell
+# 1. Validate sample datasets (incidents, service requests, assets)
+python scripts/validate-data.py
 
-A proper Active Directory lab ideally runs on a Windows Server VM acting as a domain controller. I haven't set that up for practical reasons:
+# 2. Run reporting calculation tests
+python -m unittest discover -s reporting/tests -v
 
-- **RAM**: With 16 GB total, Windows 11 uses about 4–6 GB at idle. A Windows Server VM needs a minimum of 2 GB (realistically 4 GB to be usable). Running both alongside Packet Tracer, a browser with ServiceNow open, and Python scripts gets tight.
-- **Storage**: A Windows Server installation takes 15–20 GB minimum. With 191 GB free that's doable, but adding snapshots and test data eats space fast.
-- **CPU**: 4 cores / 8 threads is enough for a VM, but it slows everything else down noticeably when the VM is active.
-- **Windows Server licensing**: The evaluation ISO is free for 180 days, but it's another thing to manage and rebuild when it expires.
+# 3. Generate Service Desk KPI summary reports
+python reporting/report-generator.py --save all
 
-The trade-off I've made: Active Directory exercises are documented procedurally using local tools (PowerShell AD modules where available, documented procedures for the rest). If I get access to better hardware or a cloud lab environment, I can set up a proper DC. For now, the priority is learning the concepts and workflows, not running a domain.
-
-### What Runs Concurrently
-
-A typical lab session looks like:
-
-- Windows 11 (host OS) — ~5 GB RAM
-- Browser with 3–5 tabs (ServiceNow PDI, Jira, reference docs) — ~1.5–2 GB
-- VS Code or text editor — ~500 MB
-- Packet Tracer (when doing networking modules) — ~500 MB
-- Python script execution — negligible
-- PowerShell sessions — negligible
-
-That leaves enough headroom to work comfortably without swapping.
-
-## Directory & Storage Layout
-
-The lab lives on the **D: drive** at `D:\Projects\enterprise-it-service-desk-lab`. The D: partition has roughly 191 GB free, which is plenty for documentation, CSVs, Packet Tracer files, and screenshots.
-
-No data is stored in cloud storage or network drives — everything is local and version-controlled through Git.
-
-## Network Access
-
-The lab machine connects to a standard home network. Internet access is needed for:
-
-- ServiceNow PDI (browser)
-- Jira Service Management (browser)
-- Cisco Packet Tracer (download / occasional updates)
-- Git (pushing to remote, if configured)
-
-All network simulation happens inside Packet Tracer — no real network reconfiguration is involved.
+# 4. Run automated platform integration tests
+python scripts/test_service_desk_platform.py
+```

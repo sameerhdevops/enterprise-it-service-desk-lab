@@ -48,7 +48,7 @@ flowchart TD
 Incidents enter the service desk through:
 
 - **Self-service portal** — User submits a ticket through the ITSM portal (preferred)
-- **Email** — `itsupport@nexora.tech` creates a ticket automatically
+- **Email** — `itsupport@nexora.test` creates a ticket automatically
 - **Phone** — L1 analyst logs the ticket on behalf of the caller
 - **Monitoring alerts** — Automated alerts from infrastructure monitoring (Nagios, UptimeRobot, etc.)
 - **Walk-up** — User comes to the IT desk; analyst logs the ticket during the conversation
@@ -63,7 +63,7 @@ Every incident record must capture at minimum:
 |-------|-------------|---------|
 | Incident ID | Auto-generated | INC0021 |
 | Reported By | Name of the person reporting | Priya Sharma |
-| Contact Info | Phone/email | priya.sharma@nexora.tech |
+| Contact Info | Phone/email | priya.sharma@nexora.test |
 | Department | Business unit | Finance |
 | Reported Date/Time | When the call/email came in | 2024-11-12 09:15 IST |
 | Description | User's own words, verbatim | "My Outlook keeps crashing when I try to open attachments" |

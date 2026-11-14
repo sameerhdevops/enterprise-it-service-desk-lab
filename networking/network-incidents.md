@@ -21,7 +21,7 @@
 - **Reported Symptom:** User can access internal file shares by IP address (`\\192.168.20.15`), but browser shows "Server IP address could not be found" (`DNS_PROBE_FINISHED_NXDOMAIN`).
 - **Commands & Diagnostic Output:**
   ```cmd
-  nslookup intranet.nexora.local
+  nslookup intranet.nexora.test
   ```
   *Output:* `DNS request timed out. Server: Unknown. Address: 192.168.20.10`
 - **Root Causes:** DNS client cache corrupted; adapter configured with wrong DNS server; corporate DNS service on Domain Controller stopped.

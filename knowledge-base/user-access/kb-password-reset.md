@@ -11,7 +11,7 @@
 - Windows login screen displays: "The user name or password is incorrect" or "The referenced account is currently locked out."
 
 ### Applicable Systems
-- Active Directory Domain Services (`nexora.local`), Azure AD / Entra ID, Microsoft 365.
+- Active Directory Domain Services (`nexora.test`), Azure AD / Entra ID, Microsoft 365.
 
 ### Prerequisites
 - L1 Service Desk credentials delegated with password reset permissions in `OU=Nexora-Users`.
@@ -27,14 +27,14 @@ Before performing any reset, verify the caller by:
 1. Open **Active Directory Users and Computers** (`dsa.msc`).
 2. Search for the user account (`Ctrl + F`), entering their username (e.g., `kmurthy`).
 3. Right-click the user account > select **Reset Password...**
-4. Enter temporary password complying with policy (min 12 characters, uppercase, lowercase, numbers, symbols, e.g., `Nexora#Nov2024!`).
+4. Enter temporary password complying with policy (min 12 characters, uppercase, lowercase, numbers, symbols, e.g., `<TEMPORARY_PASSWORD>`).
 5. **CHECK:** **"User must change password at next logon"**.
 6. **UNCHECK:** **"Account is locked out"** (clears any active lockout flags).
 7. Click **OK**.
 
 ### PowerShell Alternative:
 ```powershell
-$TempPass = ConvertTo-SecureString "Nexora#Nov2024!" -AsPlainText -Force
+$TempPass = ConvertTo-SecureString "<TEMPORARY_PASSWORD>" -AsPlainText -Force
 Set-ADAccountPassword -Identity "kmurthy" -NewPassword $TempPass -Reset
 Set-ADUser -Identity "kmurthy" -ChangePasswordAtLogon $true
 Unlock-ADAccount -Identity "kmurthy"

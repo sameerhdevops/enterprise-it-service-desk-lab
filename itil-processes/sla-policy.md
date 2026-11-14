@@ -99,28 +99,21 @@ Simply assigning the ticket without contacting the user does not satisfy the res
 
 **Clarifications:**
 - A **workaround** that fully restores the user's ability to work counts as resolution. The underlying problem can be tracked separately in a problem record.
-- Resolution time **pauses** (SLA clock stops) when:
-  - The ticket is in "Pending — User" status (waiting for user to provide information or test)
-  - The ticket is in "Pending — Vendor" status (waiting for third-party action, documented)
-- Resolution time **does not pause** for:
-  - Internal resource constraints (not enough staff)
-  - Waiting for parts to arrive (should be escalated or tracked in procurement)
-  - Shift changes
+- **Continuous Elapsed Clock:** In this laboratory and the local Service Desk application, resolution time is tracked continuously 24x7 from the moment of ticket creation (`created_at`) until technical resolution (`resolved_at`).
+- **No Pausing for Pending States:** The application does not implement calendar schedules or pause the clock for `Pending Customer` or `Pending Vendor` states. Elapsed hours accumulate continuously (`elapsed_hours = (resolved_at or now) - created_at`).
 
 ### 5.3 SLA Clock Behavior
 
-| Priority | Clock Starts | Clock Runs | Clock Pauses |
-|----------|-------------|------------|--------------|
-| P1 | On ticket creation | 24/7 continuously | Only for Pending-User |
-| P2 | On ticket creation | Extended hours (Mon-Fri 08:00-20:00) | Pending-User, Pending-Vendor |
-| P3 | On ticket creation | Standard hours (Mon-Fri 09:00-18:00) | Pending-User, Pending-Vendor |
-| P4 | On ticket creation | Standard hours (Mon-Fri 09:00-18:00) | Pending-User, Pending-Vendor |
+| Priority | Clock Starts | Clock Runs | Clock Pauses | Resolution Target |
+|----------|-------------|------------|--------------|-------------------|
+| P1 | On ticket creation | 24/7 continuous elapsed time | Does not pause | 4 elapsed hours |
+| P2 | On ticket creation | 24/7 continuous elapsed time | Does not pause | 8 elapsed hours |
+| P3 | On ticket creation | 24/7 continuous elapsed time | Does not pause | 72 elapsed hours |
+| P4 | On ticket creation | 24/7 continuous elapsed time | Does not pause | 120 elapsed hours |
 
-**Example — P3 filed Friday at 17:00:**
-- 1 hour of SLA time elapses Friday (17:00–18:00)
-- Clock stops over the weekend
-- Clock resumes Monday at 09:00
-- 4-hour response SLA = respond by Monday 12:00
+**Continuous Clock Evaluation:**
+- Elapsed time begins immediately upon ticket submission.
+- All targets are evaluated as continuous elapsed clock hours, providing an unambiguous and mathematically reproducible calculation across all reports and test suites.
 
 ## 6. Service Level Targets — Service Requests
 
@@ -170,7 +163,7 @@ The SLA does not apply in the following situations:
 - **Scheduled maintenance** — Planned maintenance during approved windows (users notified ≥48 hours in advance)
 - **User-caused issues** — Damage from unauthorized software installation, physical damage from misuse
 - **Third-party service outages** — When the root cause is entirely at a third-party provider (e.g., Microsoft 365 global outage), though communication SLAs still apply
-- **Insufficient information** — When the user does not provide required information to diagnose (clock pauses, not excluded)
+- **Insufficient information** — When the user has not yet provided necessary information to diagnose the issue
 
 ## 10. Reporting
 

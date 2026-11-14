@@ -56,7 +56,7 @@ alex.chen
 divya.ramesh
 
 === DNS SRV RECORD RESOLUTION (_ldap._tcp.nexora.test) ===
-0 100 389 softwaresamee.nexora.test.
+0 100 389 dc.nexora.test.
 
 === DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===
 172.24.160.96

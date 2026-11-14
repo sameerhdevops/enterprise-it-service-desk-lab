@@ -19,7 +19,7 @@ As an L1 Service Desk Analyst, account administration is one of the highest-volu
 ## 2. Managing Users via Graphical Interface (ADUC)
 
 1. Launch **Active Directory Users and Computers** (`dsa.msc`).
-2. Navigate to the appropriate OU: `nexora.local > Nexora-Users > [Department]`.
+2. Navigate to the appropriate OU: `nexora.test > Nexora-Users > [Department]`.
 3. **Inspect Account Properties:**
    - Double-click user > **Account** tab.
    - Note fields: *User logon name* (`sAMAccountName` and `userPrincipalName`), *Account options* (*User must change password at next logon*, *Account is disabled*, *Account is locked out*).
@@ -47,14 +47,14 @@ New-ADUser -Name "Kavitha Murthy" `
            -GivenName "Kavitha" `
            -Surname "Murthy" `
            -SamAccountName "kmurthy" `
-           -UserPrincipalName "kmurthy@nexora.local" `
+           -UserPrincipalName "kmurthy@nexora.test" `
            -Path "OU=HR,OU=Nexora-Users,DC=nexora,DC=local" `
            -AccountPassword $Password `
            -Enabled $true `
            -ChangePasswordAtLogon $true `
            -Department "Human Resources" `
            -Title "HR Generalist" `
-           -EmailAddress "kmurthy@nexora.local"
+           -EmailAddress "kmurthy@nexora.test"
 ```
 
 ### Unlock an Account:
@@ -65,5 +65,5 @@ Unlock-ADAccount -Identity "kmurthy"
 ### Disable an Account (Offboarding):
 ```powershell
 Disable-ADAccount -Identity "kmurthy"
-Set-ADUser -Identity "kmurthy" -Description "Account disabled per HR offboarding ticket SR0006 on 2024-11-12 by Sameer K."
+Set-ADUser -Identity "kmurthy" -Description "Account disabled per HR offboarding ticket SR0006 on 2024-11-12 by Alex Chen (Service Desk)."
 ```

@@ -48,7 +48,7 @@ List cached Kerberos tickets and purge to refresh without rebooting:
 klist
 klist purge
 ```
-*Interpretation:* `klist purge` deletes cached Kerberos ticket-granting tickets (TGT), forcing Windows to request a fresh ticket containing updated group SIDs upon next network access.
+*Interpretation:* `klist purge` clears cached Kerberos service tickets and the Ticket Granting Ticket (TGT). However, because Windows constructs the interactive user session access token (containing group SIDs) during initial authentication, `klist purge` alone does not update all local session token evaluations. The user must sign out and sign back in to guarantee that Windows builds a fresh logon token containing newly assigned group memberships.
 
 Inspect mapped network drives and disconnect stale sessions:
 ```cmd
@@ -70,7 +70,7 @@ net use \\nexfs01\finance /delete
 
 ### 9. Corrective Action
 1. **Verify Group Membership in AD:** If missing, initiate Service Request approval and add user to the designated security group in Active Directory Users and Computers (ADUC).
-2. **Refresh Security Token:** Instruct the user to **Sign Out** of Windows (`shutdown /l`) and sign back in. (Or run `klist purge`).
+2. **Refresh Security Token:** Instruct the user to **Sign Out** of Windows (`shutdown /l`) and sign back in to guarantee that Windows rebuilds the logon security token containing the newly assigned group SIDs.
 3. **Clear Cached Credentials:** Open Windows Credential Manager (`control keymgr.dll`) > Windows Credentials > remove any stored entries for `nexfs01`.
 4. **Remap Network Drive:**
    ```cmd

@@ -1,13 +1,13 @@
 NEXORA TECHNOLOGIES - SERVICE DESK PLATFORM VERIFICATION REPORT
-Timestamp: 2026-11-14T10:24:28.397359+00:00
+Timestamp: 2026-11-14T15:51:13.724265+00:00
 Target: http://127.0.0.1:8089
 Result: 17/17 TEST MODULES PASSED (100% SUCCESS)
 
-[INIT] Server running on 127.0.0.1:8089 using isolated DB: C:\Users\sameer\AppData\Local\Temp\tmp745nvgfc\test_servicedesk.db
+[INIT] Server running on 127.0.0.1:8089 using isolated DB: <TEMP_DIR>\test_servicedesk.db
 [INIT] Dynamic agent credentials generated (no hardcoded credentials in source)
 [TEST 1] Security Headers & CSP: Verified nosniff, SAMEORIGIN, and CSP on /portal and /agent. [PASS]
 [TEST 2] Agent API Authorization: Unauthenticated access to /api/tickets, /api/stats, and /api/export rejected with HTTP 401. [PASS]
-[TEST 3] Authentication Gate: Validated PBKDF2 hash, issued session token (18327690...). [PASS]
+[TEST 3] Authentication Gate: Validated PBKDF2 hash, issued session token (REDACTED_SESSION_TOKEN...). [PASS]
 [TEST 4] Authenticated Queue Retrieval: Verified 10 seed tickets. [PASS]
 [TEST 5] Input Validation: Missing mandatory fields and invalid email rejected with HTTP 400. [PASS]
 [TEST 6] Priority Calculation & Dynamic SLA Target Verification:
@@ -67,7 +67,7 @@ Result: 17/17 TEST MODULES PASSED (100% SUCCESS)
 [TEST 17] Existing Database Credential Migration & Ticket Preservation:
   - Automatic init_db() migration: Old password invalidated; new rotated credentials verified. [PASS]
   - Database Integrity: All 5 ticket records, all activity records, and user count strictly preserved without duplicates. [PASS]
-  - Strict Permissions Verification: Verified fail-closed permissions (SIDs / mode 0600) on C:\Users\sameer\AppData\Local\Temp\tmpa6ox10s0\mig_creds.json. [PASS]
+  - Strict Permissions Verification: Verified fail-closed permissions (SIDs / mode 0600) on <TEMP_DIR>\mig_creds.json. [PASS]
   - Strict ACL Defense: Successfully rejected unexpected unauthorized principal (Everyone). [PASS]
   - Strict ACL Defense: Successfully rejected enabled inheritance. [PASS]
   - Migration Failure Handling: Verified database password is NOT rotated when credentials cannot be safely persisted. [PASS]

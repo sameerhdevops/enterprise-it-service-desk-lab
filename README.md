@@ -1,120 +1,133 @@
-# Enterprise IT Service Desk Lab
+# IT Support & Service Desk Lab
 
-[![Repository](https://img.shields.io/badge/GitHub-sameerhdevops%2Fenterprise--it--service--desk--lab-blue?logo=github)](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)
-[![Validation Tests](https://img.shields.io/badge/Unit%20Tests-13%2F13%20Passing-brightgreen)](reporting/tests/test_validation.py)
-[![Service Desk Tests](https://img.shields.io/badge/ITSM%20Tests-17%2F17%20Passing-brightgreen)](scripts/test_service_desk_platform.py)
-[![Data Integrity](https://img.shields.io/badge/Datasets-Validated-brightgreen)](scripts/validate-data.py)
-[![Role](https://img.shields.io/badge/Target%20Role-IT%20Support%20Engineer%20L1-orange)]()
+A hands-on practical learning project simulating entry-level IT Support and Service Desk operations for **Nexora Technologies**, a fictional company with ~25 employees.
 
-A hands-on learning lab simulating L1 IT support operations for a small fictional company called **Nexora Technologies**. Built from scratch to develop and demonstrate the practical competencies, diagnostic workflows, and tools utilized by an entry-level IT Support Engineer — ticketing, Active Directory, networking, Windows troubleshooting, and metrics analysis.
-
-**Repository URL:** [https://github.com/sameerhdevops/enterprise-it-service-desk-lab](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)
-**Project Creator / Lab Administrator:** Sameer H ([@sameerhdevops](https://github.com/sameerhdevops))
-**Target Roles:** IT Support Engineer L1, Technical Support Engineer, Service Desk Analyst, Desktop Support Engineer
+> ℹ️ **Notice:** Nexora Technologies is a fictional organization created for educational and skills-demonstration purposes. This repository represents an independent technical learning project, not commercial employment.
 
 ---
 
-## What This Is (and Isn't)
+## What This Project Is
 
-This is a **self-directed, hands-on learning portfolio**, not commercial employment. Nexora Technologies is a fictional organization (~25 employees) used to model realistic operational scenarios. The lab executes entirely on local hardware (Windows 11 host with WSL2 Ubuntu) under a strict **₹0 budget constraint** (zero paid cloud subscriptions, zero trial billing, and zero external API dependencies).
+This repository demonstrates the foundational competencies and operational workflows required for **IT Support Engineer (L1)**, **Service Desk Analyst**, **Desktop Support Technician**, and **Application Support Associate** roles:
 
-- **Deployed & Verified locally:** Custom native IT Service Desk web app, Samba 4 Active Directory Domain Controller with AGDLP group nesting, native packet capture (`.pcap`) and TShark protocol analysis, and Microsoft 365 client-side diagnostic scripts.
-- **Documented Reference Blueprints:** SaaS platform architectures (ServiceNow PDI and Jira Service Management Cloud) and Cisco Packet Tracer network simulation designs are fully documented as enterprise standard operating procedures and reference blueprints.
-
----
-
-## Security & Credential Transparency Notice
-
-> [!CAUTION]
-> **Credential Rotation & Git Provenance:**
-> Earlier experimental commits in this repository's public Git history contain static laboratory credentials used during initial drafting. In accordance with standard security hygiene, **all historical credentials have been invalidated and rotated**.
-> Current active credentials are generated dynamically on first run and stored strictly in git-ignored local secret stores (`itsm/portal/.local_credentials.json` and `evidence/active-directory/.ad_credentials.json`). No active passwords, keys, or authentication tokens are committed to source control.
+- Logging, prioritizing, and managing tickets across their lifecycle.
+- Diagnosing Windows desktop, printing, network, and account access issues.
+- Administering Active Directory user accounts, security groups, and share permissions.
+- Understanding ITIL v4 operational processes (Incident, Request, Problem, Change, and SLA governance).
+- Automating support metric calculations (MTTR, FCR, SLA compliance) and validating dataset integrity.
 
 ---
 
-## Lab Architecture & Modules
+## What Was Actually Built
 
-```text
-enterprise-it-service-desk-lab/
-├── itsm/                    # ITSM platform architectures
-│   └── portal/              # Deployed Python Service Desk Web App (Customer Portal & Agent Console)
-├── active-directory/        # Active Directory architecture, OUs, and AGDLP group nesting
-├── networking/              # Network fundamentals, troubleshooting, and Cisco IOS configs
-│   └── packet-tracer/       # Cisco 2911 ISR router & Catalyst 2960 switch running configurations
-├── windows-support/         # Windows 11 troubleshooting, Event Viewer, Fast Startup, and 15 runbooks
-├── microsoft-365/           # Client-side diagnostics, Click-to-Run builds, and Teams/OneDrive guides
-├── incidents/               # Historical sample registers: 20 incidents, 8 requests, 3 problems, 3 changes
-├── knowledge-base/          # 12 standardized enterprise KB articles (Windows, Net, M365, Access)
-├── asset-management/        # CSV-based hardware/software inventory (25 assets) and ITAM guide
-├── operations/              # Operational checklists, shift handover SOPs, and 6 end-to-end scenarios
-├── itil-processes/          # ITIL v4 incident, problem, change, and continuous SLA policies
-├── reporting/               # Python MIS reporting engine, SLA calculators, and unit tests
-├── career-assets/           # Resume bullets, Naukri/LinkedIn copy, and interview pitches
-├── interview-preparation/   # 12-minute live interview demo runbook and technical study notes
-├── evidence/                # Auditable artifacts: TShark pcap analysis, Samba AD logs, M365 diagnostics
-└── scripts/                 # Platform test suites, Samba AD manager, packet capture, and validators
+### 1. Operational Service Desk Web Application (`itsm/portal/app.py`)
+A self-contained web portal and REST API built with the Python standard library (`http.server`) and SQLite:
+- **Customer Portal (`/portal`):** Submit support requests and track real-time progress using a unique ticket key and customer access token.
+- **Agent Console (`/agent`):** Role-based access (Admin, L1 Agent, L2 Support, Read-Only), queue management, status progression, work notes, and customer communication.
+- **Priority & SLA Engine:** Calculates priority from an Impact × Urgency matrix and evaluates continuous 24x7 elapsed-time resolution targets.
+- **Security Controls:** PBKDF2-HMAC-SHA256 password hashing with salt, `HttpOnly` and `SameSite=Strict` cookies, Content Security Policy (CSP), origin validation, and stored-XSS mitigation.
+
+### 2. Active Directory Domain Services Lab (`active-directory/`)
+- Isolated **Samba 4 Active Directory Domain Controller** for realm `nexora.test` deployed on Linux/WSL2 via `scripts/deploy_samba_ad.py`.
+- Departmental Organizational Units (OUs), domain users, and textbook **AGDLP** group nesting (`Accounts` $\rightarrow$ `Global Groups` $\rightarrow$ `Domain Local Groups` $\rightarrow$ `Permissions`).
+- Kerberos ticket acquisition (`kinit`/`klist`) and verified SMB file share access control (`CompanyShared`, `HR-Private`, `Finance-Private`, `IT-Admin`).
+
+### 3. Loopback Packet Capture & TShark Protocol Analysis (`evidence/packet-captures/`)
+- Native 20-frame `.pcap` capture of isolated loopback traffic generated via `tcpdump`.
+- Forensic protocol inspection using the `tshark` CLI to verify TCP 3-way handshakes (SYN, SYN-ACK, ACK), DNS SRV lookups, DNS NXDOMAIN responses, and HTTP transactions.
+
+### 4. Metrics Reporting & CSV Validation Engine (`reporting/`, `scripts/`)
+- Python reporting script (`reporting/report-generator.py`) computing Mean Time to Resolve (MTTR: 15.75h), First Contact Resolution (FCR: 85%), and SLA compliance (85%).
+- Automated test suite (`reporting/tests/`) verifying report calculations and edge cases.
+- Dataset validator (`scripts/validate-data.py`) verifying schema, chronology, and relational integrity.
+
+---
+
+## What Is Documented or Simulated
+
+To maintain complete transparency during technical interviews, several components serve as operational reference guides and learning exercises rather than live cloud vendor deployments:
+
+- **ServiceNow & Jira Service Management:** Field mapping architectures, queue designs, and standard operating procedures (`itsm/servicenow/`, `itsm/jira-service-management/`).
+- **Cisco IOS Configurations:** Syntax-accurate running configuration drafts for Cisco 2911 router and Catalyst 2960 switch implementing a 2-VLAN office design (`networking/packet-tracer/`).
+- **Windows Support Runbooks:** 14 practical Standard Operating Procedures for desktop issues including BSOD triage, print spooler crashes, high CPU/RAM, and network adapter resets (`windows-support/runbooks/`).
+- **Microsoft 365 Support Guides:** Client-side troubleshooting procedures and a PowerShell diagnostic script (`scripts/m365-client-diag.ps1`) for Office C2R, Teams cache, and OneDrive status (`microsoft-365/`).
+- **Sample Datasets:** Canonical CSV records tracking 20 incidents, 8 service requests, 3 problem investigations, 3 change records, and 25 hardware/software assets (`incidents/`, `asset-management/`).
+
+---
+
+## Technologies Used
+
+- **Languages & Core:** Python 3 (standard library: `http.server`, `sqlite3`, `csv`, `json`, `hashlib`, `urllib`), PowerShell 5.1+, Bash
+- **Operating Systems:** Windows 11 host, Ubuntu Linux under WSL2
+- **Directory Services:** Samba 4 (Active Directory Domain Controller, Kerberos KDC, SMB/CIFS, DNS)
+- **Networking & Packet Analysis:** `tcpdump`, `tshark` (Wireshark CLI), Cisco IOS syntax
+- **Testing:** Python `unittest`, Playwright (headless browser UI / XSS verification gate)
+
+---
+
+## Quickstart & Local Verification
+
+### Prerequisites
+- Python 3.10+ (core portal, reports, and validation require zero external pip packages).
+- Optional test dependencies: `pip install -r requirements-test.txt` and `python -m playwright install chromium` (for browser UI test in Module 14).
+
+### 1. Run the Service Desk Application
+```powershell
+python itsm/portal/app.py
+```
+- Customer Portal: `http://127.0.0.1:8080/portal`
+- Agent Console: `http://127.0.0.1:8080/agent`
+*(Dynamic agent credentials are generated on first run and stored in the local `.local_credentials.json` file).*
+
+### 2. Validate CSV Datasets
+```powershell
+python scripts/validate-data.py
 ```
 
-| Module | What It Covers | Standard Status |
-|--------|---------------|-----------------|
-| **itsm/portal/** | **Operational Service Desk Platform** — Native web application (`app.py`, Python stdlib + SQLite): Customer Portal, L1 Operator Console, 10 operational queues, PBKDF2 authentication, CSRF/same-origin protection, customer access token security, dynamic SLA clock tracking, stored XSS defense. | **DEPLOYED & VERIFIED** |
-| **itsm/** | ITSM platform architecture & comparison blueprints — ServiceNow (PDI) and Jira Service Management setup, ticket workflows, SLA definitions. | **DOCUMENTED / REFERENCE** |
-| **incidents/** | Fictional incident scenarios with full lifecycle documentation: logging, categorization, troubleshooting, and resolution notes. | **SIMULATED & VERIFIED** |
-| **knowledge-base/** | 12 standardized enterprise KB articles for common support scenarios: password resets, VPN, printers, M365 issues. | **DOCUMENTED / REFERENCE** |
-| **active-directory/** | Active Directory architecture, OUs, textbook AGDLP group nesting (`GG-*` -> `DL-*`), and Samba 4 AD DC deployment (`scripts/deploy_samba_ad.py`). | **DEPLOYED & VERIFIED** |
-| **networking/** | Network fundamentals: Cisco 2911 router and 2960 switch IOS configs (`rtr01`, `sw01`), VLANs, 802.1Q subinterfaces, router DHCP, NAT, lab guide. | **IMPLEMENTED & VERIFIED** (Configs) / **DOCUMENTED / REFERENCE** (Sim Guide) |
-| **windows-support/** | Windows 11 troubleshooting: Fast Startup vs memory leaks, Event Viewer (ID 4740), Print Spooler, remote support, 15 authored runbooks. | **IMPLEMENTED & VERIFIED** |
-| **microsoft-365/** | M365 client diagnostics (`scripts/m365-client-diag.ps1`), Click-to-Run builds, Teams LocalCache, measured TCP 443 connect latency. | **DEPLOYED & VERIFIED** (Client Diag) / **OUT OF FINAL SCOPE** (Tenant Admin) |
-| **asset-management/** | Hardware/software inventory tracking using CSV-based records (25 assets). | **SIMULATED & VERIFIED** |
-| **operations/** | Operational procedures: 6 end-to-end support scenarios, shift handover templates, daily checklists, escalation procedures. | **IMPLEMENTED & VERIFIED** |
-| **reporting/** | Python scripts (stdlib only) for generating reports from incident and asset data; 13/13 passing unit tests. | **IMPLEMENTED & VERIFIED** |
-| **communication/** | Email templates, user communication guides, phone scripts for support scenarios. | **DOCUMENTED / REFERENCE** |
-| **itil-processes/** | ITIL v4 foundations applied: incident management, problem management, change management, continuous elapsed-clock-hour SLA. | **IMPLEMENTED & VERIFIED** |
-| **interview-preparation/** | Study notes, 12-minute live interview demonstration runbook (`live-demo-runbook.md`), and scenario practice. | **IMPLEMENTED & VERIFIED** |
-| **career-assets/** | Interview-ready portfolio descriptions: Resume bullets, Naukri/LinkedIn copy, 60s/3m pitches (`portfolio-descriptions.md`). | **IMPLEMENTED & VERIFIED** |
-| **evidence/** | Verified command outputs, clean loopback `.pcap` capture & TShark analysis, Samba AD DC verification logs, M365 diagnostics. | **DEPLOYED & VERIFIED** |
-| **scripts/** | Administration, deployment, packet capture, and test scripts (all standard library, zero external pip packages). | **IMPLEMENTED & VERIFIED** |
-
----
-
-## Quick Start & Local Verification
-
-Clone and test the entire lab environment locally. All scripts use standard library components with **zero pip dependencies**:
-
-```bash
-# Clone the repository
-git clone https://github.com/sameerhdevops/enterprise-it-service-desk-lab.git
-cd enterprise-it-service-desk-lab
-
-# 1. Run the Service Desk test suite (17/17 tests passing)
-python scripts/test_service_desk_platform.py
-
-# 2. Launch the interactive Service Desk Platform (Customer Portal & Agent Console)
-python itsm/portal/app.py
-# -> Customer Portal:       http://127.0.0.1:8080/portal
-# -> L1 Agent Queue:        http://127.0.0.1:8080/agent
-
-# 3. Validate dataset integrity across all CSV registers (0 errors, 0 warnings)
-python scripts/validate-data.py
-
-# 4. Run automated validation and calculation unit test suite (13/13 passing)
+### 3. Run Reporting Engine & Tests
+```powershell
+# Run unit tests
 python -m unittest discover -s reporting/tests -v
 
-# 5. Generate Service Desk MIS and SLA reports
+# Generate summary reports to reporting/reports/
 python reporting/report-generator.py --save all
 ```
 
----
-
-## Auditable Lab Evidence
-
-- **tcpdump Packet Capture & TShark Protocol Analysis:** Native packet capture file at `evidence/packet-captures/nexora-lab-traffic.pcap` (3,776 bytes, can be opened in Wireshark or inspected via TShark). Read the companion [packet analysis report](evidence/packet-captures/packet-analysis-report.md) with verified display filters for ICMP, DNS SRV/NXDOMAIN, and TCP 3-way handshakes.
-- **Active Directory Verification:** Inspect `evidence/active-directory/samba-ad-dc-verification.txt` for real Kerberos ticket granting (`kinit`), DNS SRV lookups, and authenticated SMB share read/write and access denial assertions.
-- **Microsoft 365 Diagnostics:** Inspect `evidence/microsoft-365/m365-client-diagnostics-output.txt` for host Click-to-Run builds, New Teams LocalCache checks, OneDrive process state, and live TCP port 443 socket connect latencies to Microsoft cloud endpoints.
-- **Live Interview Demo:** Follow the step-by-step 12-minute script in [interview-preparation/live-demo-runbook.md](interview-preparation/live-demo-runbook.md).
+### 4. Run Service Desk Automated Test Suite
+```powershell
+python scripts/test_service_desk_platform.py
+```
 
 ---
 
-## Disclaimer
+## Project Structure
 
-This is an **independent learning project**. Nexora Technologies is a fictional organization created for practical technical training. The incidents, users, and organizational structure are simulated for hands-on practice.
+```text
+enterprise-it-service-desk-lab/
+├── itsm/                    # ITSM platform documentation & local portal code
+│   └── portal/              # Python Service Desk Web App (Customer & Agent portals)
+├── active-directory/        # Active Directory guides, user lifecycle, and AGDLP policies
+├── networking/              # Network fundamentals, troubleshooting, and Cisco IOS configs
+├── windows-support/         # Windows 10/11 troubleshooting guides and 14 support runbooks
+├── microsoft-365/           # Client-side troubleshooting guides and diagnostic script
+├── incidents/               # Canonical CSV datasets: incidents, requests, problems, changes
+├── knowledge-base/          # Standardized KB articles (Windows, Network, M365, User Access)
+├── asset-management/        # CSV hardware/software inventory (25 assets) and ITAM guide
+├── operations/              # Daily checklists, shift handover SOPs, and support scenarios
+├── itil-processes/          # ITIL v4 incident, problem, change, and continuous SLA policies
+├── reporting/               # Python reporting engine, summary reports, and unit tests
+├── evidence/                # Verifiable artifacts: TShark pcap analysis, Samba AD logs
+├── docs/                    # Architecture, environment setup, and technical walkthrough
+└── scripts/                 # Platform test suite, Samba deployment, and data validators
+```
+
+---
+
+## Project Limitations
+
+- **Fictional Enterprise:** Nexora Technologies and all associated ticket records are simulated for practice.
+- **No Live SaaS Subscriptions:** ServiceNow and Jira Service Management materials are operational documentation and architecture guides.
+- **Client-Side M365 Scope:** Microsoft 365 work focuses on desktop endpoint triage and diagnostic scripts, not global tenant administration.
+- **Reference Network Configs:** Cisco IOS running configs are syntax-checked reference drafts; the repository does not include a compiled `.pkt` simulator file.
+- **Loopback Packet Capture:** The PCAP file captures local Linux loopback traffic (`lo`) generated during lab testing, not a physical corporate switch fabric.
+- **Educational Scope:** The custom Python service desk application is an educational learning project, not commercial enterprise software.
