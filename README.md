@@ -2,14 +2,14 @@
 
 [![Repository](https://img.shields.io/badge/GitHub-sameerhdevops%2Fenterprise--it--service--desk--lab-blue?logo=github)](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)
 [![Validation Tests](https://img.shields.io/badge/Unit%20Tests-13%2F13%20Passing-brightgreen)](reporting/tests/test_validation.py)
-[![Service Desk Tests](https://img.shields.io/badge/ITSM%20Tests-15%2F15%20Passing-brightgreen)](scripts/test_service_desk_platform.py)
+[![Service Desk Tests](https://img.shields.io/badge/ITSM%20Tests-17%2F17%20Passing-brightgreen)](scripts/test_service_desk_platform.py)
 [![Data Integrity](https://img.shields.io/badge/Datasets-Validated-brightgreen)](scripts/validate-data.py)
 [![Role](https://img.shields.io/badge/Target%20Role-IT%20Support%20Engineer%20L1-orange)]()
 
 A hands-on learning lab simulating L1 IT support operations for a small fictional company called **Nexora Technologies**. Built from scratch to develop and demonstrate the practical competencies, diagnostic workflows, and tools utilized by an entry-level IT Support Engineer — ticketing, Active Directory, networking, Windows troubleshooting, and metrics analysis.
 
-**Repository URL:** [https://github.com/sameerhdevops/enterprise-it-service-desk-lab](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)  
-**Project Creator / Lab Administrator:** Sameer H ([@sameerhdevops](https://github.com/sameerhdevops))  
+**Repository URL:** [https://github.com/sameerhdevops/enterprise-it-service-desk-lab](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)
+**Project Creator / Lab Administrator:** Sameer H ([@sameerhdevops](https://github.com/sameerhdevops))
 **Target Roles:** IT Support Engineer L1, Technical Support Engineer, Service Desk Analyst, Desktop Support Engineer
 
 ---
@@ -108,7 +108,7 @@ python reporting/report-generator.py --save all
 
 ## Auditable Lab Evidence
 
-- **Wireshark / TShark Packet Capture:** Open `evidence/packet-captures/nexora-lab-traffic.pcap` (3,776 bytes) in Wireshark or inspect with TShark. Read the companion [packet analysis report](evidence/packet-captures/packet-analysis-report.md) with verified display filters for ICMP, DNS SRV/NXDOMAIN, and TCP 3-way handshakes.
+- **tcpdump Packet Capture & TShark Protocol Analysis:** Native packet capture file at `evidence/packet-captures/nexora-lab-traffic.pcap` (3,776 bytes, can be opened in Wireshark or inspected via TShark). Read the companion [packet analysis report](evidence/packet-captures/packet-analysis-report.md) with verified display filters for ICMP, DNS SRV/NXDOMAIN, and TCP 3-way handshakes.
 - **Active Directory Verification:** Inspect `evidence/active-directory/samba-ad-dc-verification.txt` for real Kerberos ticket granting (`kinit`), DNS SRV lookups, and authenticated SMB share read/write and access denial assertions.
 - **Microsoft 365 Diagnostics:** Inspect `evidence/microsoft-365/m365-client-diagnostics-output.txt` for host Click-to-Run builds, New Teams LocalCache checks, OneDrive process state, and live TCP port 443 socket connect latencies to Microsoft cloud endpoints.
 - **Live Interview Demo:** Follow the step-by-step 12-minute script in [interview-preparation/live-demo-runbook.md](interview-preparation/live-demo-runbook.md).

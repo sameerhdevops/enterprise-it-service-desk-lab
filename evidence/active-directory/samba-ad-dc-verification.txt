@@ -66,8 +66,8 @@ Ticket cache: FILE:/tmp/krb5cc_0
 Default principal: alex.chen@NEXORA.TEST
 
 Valid starting     Expires            Service principal
-11/14/26 08:35:59  11/14/26 18:35:59  krbtgt/NEXORA.TEST@NEXORA.TEST
-	renew until 11/15/26 08:35:59
+11/14/26 10:21:03  11/14/26 20:21:03  krbtgt/NEXORA.TEST@NEXORA.TEST
+	renew until 11/15/26 10:21:03
 
 === SMB SHARES DISCOVERY ===
 	sysvol          Disk      
@@ -79,39 +79,39 @@ Valid starting     Expires            Service principal
 	IPC$            IPC       IPC Service (Samba 4.19.5-Ubuntu)
 
 === AUTHORIZED SHARE WRITE TEST (alex.chen -> CompanyShared) ===
-putting file /tmp/test_shared.txt as \test_policy.txt (5.4 kb/s) (average 5.4 kb/s)
-  .                                   D        0  Sat Nov 14 08:35:59 2026
-  ..                                  D        0  Sat Nov 14 08:35:59 2026
-  test_policy.txt                     A       39  Sat Nov 14 08:35:59 2026
+putting file /tmp/test_shared.txt as \test_policy.txt (3.8 kb/s) (average 3.8 kb/s)
+  .                                   D        0  Sat Nov 14 10:21:04 2026
+  ..                                  D        0  Sat Nov 14 10:21:04 2026
+  test_policy.txt                     A       39  Sat Nov 14 10:21:04 2026
 
-		1055762868 blocks of size 1024. 993785132 blocks available
+		1055762868 blocks of size 1024. 993739792 blocks available
 
 === AUTHORIZED SHARE WRITE TEST (HR User kavitha.murthy -> HR-Private) ===
 putting file /tmp/test_hr.txt as \hr_doc.txt (7.8 kb/s) (average 7.8 kb/s)
-  .                                   D        0  Sat Nov 14 08:35:59 2026
-  ..                                  D        0  Sat Nov 14 08:35:59 2026
-  hr_doc.txt                          A       24  Sat Nov 14 08:35:59 2026
+  .                                   D        0  Sat Nov 14 10:21:04 2026
+  ..                                  D        0  Sat Nov 14 10:21:04 2026
+  hr_doc.txt                          A       24  Sat Nov 14 10:21:04 2026
 
-		1055762868 blocks of size 1024. 993785132 blocks available
+		1055762868 blocks of size 1024. 993739792 blocks available
 
 === DENIED ACCESS TEST (Finance User deepak.rao -> HR-Private) ===
 tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)
 
 === AUTHORIZED SHARE WRITE TEST (Finance User deepak.rao -> Finance-Private) ===
-putting file /tmp/test_fin.txt as \fin_report.txt (5.0 kb/s) (average 5.0 kb/s)
-  .                                   D        0  Sat Nov 14 08:36:00 2026
-  ..                                  D        0  Sat Nov 14 08:36:00 2026
-  fin_report.txt                      A       31  Sat Nov 14 08:36:00 2026
+putting file /tmp/test_fin.txt as \fin_report.txt (6.1 kb/s) (average 6.1 kb/s)
+  .                                   D        0  Sat Nov 14 10:21:04 2026
+  ..                                  D        0  Sat Nov 14 10:21:04 2026
+  fin_report.txt                      A       31  Sat Nov 14 10:21:04 2026
 
-		1055762868 blocks of size 1024. 993785132 blocks available
+		1055762868 blocks of size 1024. 993739792 blocks available
 
 === DENIED ACCESS TEST (HR User kavitha.murthy -> IT-Admin) ===
 tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)
 
 === AUTHORIZED SHARE WRITE TEST (IT User alex.chen -> IT-Admin) ===
 putting file /tmp/test_it.txt as \it_doc.txt (5.1 kb/s) (average 5.1 kb/s)
-  .                                   D        0  Sat Nov 14 08:36:00 2026
-  ..                                  D        0  Sat Nov 14 08:36:00 2026
-  it_doc.txt                          A       26  Sat Nov 14 08:36:00 2026
+  .                                   D        0  Sat Nov 14 10:21:04 2026
+  ..                                  D        0  Sat Nov 14 10:21:04 2026
+  it_doc.txt                          A       26  Sat Nov 14 10:21:04 2026
 
-		1055762868 blocks of size 1024. 993785132 blocks available
+		1055762868 blocks of size 1024. 993739792 blocks available

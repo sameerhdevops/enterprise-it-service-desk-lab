@@ -1,12 +1,12 @@
 # Project Status & Compliance Audit
 ## Enterprise IT Service Desk & End-User Support Operations Lab
 
-**Organization:** Nexora Technologies (Simulated Enterprise, ~25 employees)  
-**Location:** `D:\Projects\enterprise-it-service-desk-lab`  
-**Completion Date:** 2026-11-14 (Final Remediation & Release Verification)  
-**Role:** Project Creator / IT Support Lab Administrator (Targeting IT Support Engineer L1 / Service Desk Analyst)  
-**Author / Candidate:** Sameer H (`280061708+sameerhdevops@users.noreply.github.com`)  
-**Target Repository:** [https://github.com/sameerhdevops/enterprise-it-service-desk-lab](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)  
+**Organization:** Nexora Technologies (Simulated Enterprise, ~25 employees)
+**Location:** `D:\Projects\enterprise-it-service-desk-lab`
+**Completion Date:** 2026-11-14 (Final Remediation & Release Verification)
+**Role:** Project Creator / IT Support Lab Administrator (Targeting IT Support Engineer L1 / Service Desk Analyst)
+**Author / Candidate:** Sameer H (`280061708+sameerhdevops@users.noreply.github.com`)
+**Target Repository:** [https://github.com/sameerhdevops/enterprise-it-service-desk-lab](https://github.com/sameerhdevops/enterprise-it-service-desk-lab)
 **Default Branch:** `main` | **Starting Commit:** `758cca5ed102c082863f2adbbed33772282091e1`
 
 ---
@@ -60,7 +60,7 @@ All modules adhere to strict truth-in-advertising classifications:
 | **Module 4: Windows Support Lab** | 15 runbooks in `windows-support/runbooks/`, 5 domain support guides | **IMPLEMENTED & VERIFIED** | 15 complete runbooks with commands and verified outputs; Fast Startup & driver DPC corrected. |
 | **Module 5: Active Directory Admin** | Samba 4 AD DC (`nexora.test`), `scripts/deploy_samba_ad.py`, verification logs | **DEPLOYED & VERIFIED** | Fully provisioned domain controller in WSL2; Kerberos, LDAP, 12 users with unique credentials, AGDLP groups verified. |
 | **Module 6: Microsoft 365 Support** | `scripts/m365-client-diag.ps1`, `evidence/microsoft-365/`, 3 client guides | **DEPLOYED & VERIFIED** (Client Diag) / **OUT OF FINAL SCOPE** (Tenant Admin) | Real host diagnostics executed on Windows 11 host; Teams cache, OneDrive, and M365 ports verified with TCP connect latency. |
-| **Module 7: Network Troubleshooting** | Packet captures (`.pcap`), Wireshark report, Cisco IOS configs, 8 incident runbooks | **DEPLOYED & VERIFIED** | Native `.pcap` capture (3,776 bytes) verified with 8 display filters; Cisco 2911/2960 IOS configurations complete. |
+| **Module 7: Network Troubleshooting** | Packet captures (`.pcap`), TShark analysis report, Cisco IOS configs, 8 incident runbooks | **DEPLOYED & VERIFIED** | Native `.pcap` capture (3,776 bytes) verified with 8 TShark display filters; Cisco 2911/2960 IOS configurations complete. |
 | **Module 8: ITIL Processes & Ops** | 7 ITIL process docs, SLA policy, Escalation matrix, Shift handover, End-to-End scenarios | **IMPLEMENTED & VERIFIED** | Full ITIL documentation in `itil-processes/`, operational checklists, and 6 end-to-end scenarios. |
 | **Module 9: Asset Management & CMDB** | `asset-inventory.csv` (25 assets), ITAM guide, CMDB fundamentals | **SIMULATED & VERIFIED** | 25 assets tracked with serials & warranties; ITAM lifecycle and CMDB dependency mapping. |
 | **Module 10: Knowledge Base** | 12 standardized KB articles (`KB0001`–`KB0012`) | **DOCUMENTED / REFERENCE** | Standard enterprise KB articles across Windows, Networking, M365, and User Access. |
@@ -76,8 +76,8 @@ All modules adhere to strict truth-in-advertising classifications:
 - **Target Repository:** `https://github.com/sameerhdevops/enterprise-it-service-desk-lab`
 - **Unit Test Suite (`reporting/tests/test_validation.py`):** 13/13 Tests Passed (0.022s)
 - **Dataset Validator (`scripts/validate-data.py`):** 5/5 Datasets Validated (0 Errors, 0 Warnings)
-- **Service Desk Test Suite (`scripts/test_service_desk_platform.py`):** 17/17 HTTP Tests Passed in isolated sandbox (100% Pass)
-- **Active Directory Provisioning (`scripts/deploy_samba_ad.py`):** Non-destructive AGDLP verification passed; credentials rotated and stored in git-ignored `.ad_credentials.json` (0 credentials leaked)
+- **Service Desk Test Suite (`scripts/test_service_desk_platform.py`):** 17/17 HTTP & Headless Browser Automation Tests Passed in isolated sandbox (100% Pass; Playwright Chromium DOM verification, strict SID-based Windows ACL checks, transactionally recoverable credential migration)
+- **Active Directory Provisioning (`scripts/deploy_samba_ad.py`):** Non-destructive AGDLP verification passed; native Python SamDB API and fresh domain provision via stdin (0 CLI password arguments), fail-closed DNS hygiene, and credentials stored in git-ignored `.ad_credentials.json` protected by Windows NTFS ACLs / mode 0600 (0 credentials leaked)
 - **Packet Capture & Inspection (`scripts/capture_packets.py`):** Clean loopback `.pcap` generated (3,776 bytes, 20 frames), 8 TShark display filters verified with dynamic frame metadata extraction
 - **Host M365 Diagnostics (`scripts/m365-client-diag.ps1`):** Live Windows 11 host scan completed with measured TCP connect latencies (992.9 ms, 338.2 ms, 434.8 ms) and sanitized workstation identifiers
 - **Reporting Generator:** MTTR = 15.75 hours (across 17 resolved incidents, 267.75 total resolution hours); Resolved Ticket Share = 85.0% (17 of 20 sample incidents resolved); SLA Compliance = 100.0% on resolved tickets, 85.0% across overall portfolio at historical snapshot baseline.

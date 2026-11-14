@@ -80,24 +80,129 @@ def verify_password(password: str, salt: str, expected_hash: str) -> bool:
     key, _ = hash_password(password, salt)
     return secrets.compare_digest(key, expected_hash)
 
+def verify_local_file_permissions(filepath: str) -> bool:
+    """
+    Verifies that the target credentials file has strict, fail-closed permissions:
+    - On Windows NTFS:
+      * Inheritance disabled (AreAccessRulesProtected == True)
+      * Explicit Allow permissions granted ONLY to current user SID and BUILTIN\\Administrators (S-1-5-32-544)
+      * Both principals have FullControl
+      * No unexpected Allow or Deny principals exist
+    - On POSIX / Linux:
+      * File mode is strictly 0600 (owner read/write only)
+    Raises PermissionError or RuntimeError if permissions are invalid or verification fails.
+    """
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Target file does not exist: {filepath}")
+
+    if os.name == "nt":
+        import subprocess
+        ps_check = """
+$path = $env:TARGET_FILE
+$acl = Get-Acl -LiteralPath $path
+$user = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$userSid = $user.User.Value
+$adminSid = "S-1-5-32-544"
+
+$results = @{
+    AreAccessRulesProtected = $acl.AreAccessRulesProtected
+    Rules = @()
+    CurrentUserSid = $userSid
+    AdminSid = $adminSid
+}
+
+foreach ($rule in $acl.Access) {
+    $sid = ""
+    try {
+        $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    } catch {
+        $sid = $rule.IdentityReference.Value
+    }
+    $results.Rules += @{
+        Identity = $rule.IdentityReference.Value
+        Sid = $sid
+        Rights = $rule.FileSystemRights.ToString()
+        AccessControlType = $rule.AccessControlType.ToString()
+        IsInherited = $rule.IsInherited
+    }
+}
+$results | ConvertTo-Json -Depth 5
+"""
+        env = os.environ.copy()
+        env["TARGET_FILE"] = os.path.abspath(filepath)
+        res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_check], env=env, capture_output=True, text=True)
+        if res.returncode != 0:
+            raise PermissionError(f"Failed to query Windows ACL on {filepath}: {res.stderr}")
+
+        try:
+            data = json.loads(res.stdout)
+        except Exception as e:
+            raise PermissionError(f"Could not parse ACL verification output for {filepath}: {e}\n{res.stdout}")
+
+        if not data.get("AreAccessRulesProtected"):
+            raise PermissionError(f"ACL inheritance is NOT disabled on {filepath}")
+
+        user_sid = data.get("CurrentUserSid")
+        admin_sid = data.get("AdminSid")
+        rules = data.get("Rules") or []
+
+        found_user = False
+        found_admin = False
+
+        for r in rules:
+            if r.get("IsInherited"):
+                raise PermissionError(f"Unexpected inherited rule found on {filepath}: {r}")
+            if r.get("AccessControlType") != "Allow":
+                raise PermissionError(f"Unexpected non-Allow rule on {filepath}: {r}")
+
+            sid = r.get("Sid")
+            rights = r.get("Rights", "")
+
+            if sid == user_sid:
+                if rights != "FullControl" and "FullControl" not in rights:
+                    raise PermissionError(f"Current user does not have FullControl on {filepath}: {rights}")
+                found_user = True
+            elif sid == admin_sid:
+                if rights != "FullControl" and "FullControl" not in rights:
+                    raise PermissionError(f"BUILTIN\\Administrators does not have FullControl on {filepath}: {rights}")
+                found_admin = True
+            else:
+                raise PermissionError(f"Unexpected unauthorized principal in ACL on {filepath}: {r.get('Identity')} ({sid})")
+
+        if not found_user:
+            raise PermissionError(f"Current user ({user_sid}) missing from explicit ACL on {filepath}")
+        if not found_admin:
+            raise PermissionError(f"BUILTIN\\Administrators ({admin_sid}) missing from explicit ACL on {filepath}")
+
+        return True
+
+    elif hasattr(os, "chmod"):
+        import stat
+        mode = stat.S_IMODE(os.stat(filepath).st_mode)
+        if mode != 0o600:
+            raise PermissionError(f"POSIX permissions insecure on {filepath}: mode is {oct(mode)}, required 0o600")
+        return True
+
+    return False
+
 def protect_local_file(filepath: str) -> bool:
     """
     Applies restrictive operating system filesystem permissions to a local credentials file:
-    - On Windows NTFS: Uses icacls to remove inheritance and grant Full Control strictly
+    - On Windows NTFS: Uses icacls to remove inheritance (/inheritance:r) and grant Full Control strictly
       to the current user (%USERNAME%) and BUILTIN\\Administrators (*S-1-5-32-544).
-      Captures return code, treats failures as real errors, and verifies the resulting ACL.
+      Then strictly verifies the resulting ACL using SID-based inspection.
     - On POSIX / Linux: Uses chmod 0600 (owner read/write only) and verifies file mode.
     Returns True on success, or raises RuntimeError/PermissionError on failure.
     """
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Target file does not exist: {filepath}")
-    
+
     if os.name == "nt":
         import subprocess
         username = os.environ.get("USERNAME")
         if not username:
             raise RuntimeError("Cannot resolve USERNAME environment variable for ACL configuration")
-        
+
         # 1. Apply restrictive ACLs
         res = subprocess.run(
             ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
@@ -106,50 +211,44 @@ def protect_local_file(filepath: str) -> bool:
         )
         if res.returncode != 0 or "Failed processing 0 files" not in res.stdout:
             raise PermissionError(f"Failed to apply Windows ACLs on {filepath} (code {res.returncode}): {res.stderr or res.stdout}")
-        
-        # 2. Verify resulting ACL
-        verify_res = subprocess.run(["icacls.exe", filepath], capture_output=True, text=True)
-        if verify_res.returncode != 0:
-            raise PermissionError(f"Failed to query ACLs on {filepath} (code {verify_res.returncode}): {verify_res.stderr}")
-        
-        out = verify_res.stdout.upper()
-        if "(F)" not in out or username.upper() not in out:
-            raise PermissionError(f"ACL verification failed for {filepath}. Resulting ACL:\n{verify_res.stdout}")
-        return True
+
+        # 2. Strict SID-based verification
+        return verify_local_file_permissions(filepath)
 
     elif hasattr(os, "chmod"):
-        import stat
         os.chmod(filepath, 0o600)
-        mode = stat.S_IMODE(os.stat(filepath).st_mode)
-        if mode != 0o600:
-            raise PermissionError(f"POSIX permission verification failed for {filepath}: mode is {oct(mode)}, expected 0o600")
-        return True
-    
+        return verify_local_file_permissions(filepath)
+
     return False
 
 def get_or_create_bootstrap_password(creds_file: str = LOCAL_CREDENTIALS_FILE) -> str:
     """
     Obtains the initial bootstrap password for alex.chen from:
-    1. NEXORA_PORTAL_ADMIN_PASS environment variable, or
-    2. Local ignored secrets file (.local_credentials.json), or
-    3. Securely generated random token saved to .local_credentials.json
-    Protected by local operating system filesystem ACLs.
+    1. NEXORA_PORTAL_ADMIN_PASS environment variable (never logged or exposed), or
+    2. Local ignored secrets file (.local_credentials.json) with verified permissions and schema, or
+    3. Securely generated random token saved to .local_credentials.json and verified before use.
+    Fails closed if permissions are insecure, file is corrupt, or persistence fails.
     """
     env_pass = os.environ.get("NEXORA_PORTAL_ADMIN_PASS")
     if env_pass:
         return env_pass.strip()
 
     if os.path.exists(creds_file):
+        # Ensure existing credential file is protected with restrictive OS permissions
+        protect_local_file(creds_file)
         try:
             with open(creds_file, "r", encoding="utf-8") as f:
                 creds = json.load(f)
-                if "bootstrap_password" in creds:
-                    return creds["bootstrap_password"]
-        except Exception:
-            pass
+        except Exception as e:
+            raise ValueError(f"Credentials file {creds_file} is corrupt or unparseable: {e}")
+
+        if not isinstance(creds, dict) or "bootstrap_password" not in creds or not creds.get("username"):
+            raise ValueError(f"Credentials file {creds_file} is missing required fields (username, bootstrap_password)")
+        return creds["bootstrap_password"]
 
     generated_pass = secrets.token_urlsafe(16)
     dir_name = os.path.dirname(os.path.abspath(creds_file))
+    os.makedirs(dir_name, exist_ok=True)
     tmp_file = os.path.join(dir_name, f".tmp_creds_{secrets.token_hex(6)}.json")
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
@@ -160,16 +259,16 @@ def get_or_create_bootstrap_password(creds_file: str = LOCAL_CREDENTIALS_FILE) -
                 "note": "Local credential store for IT Service Desk. Ignored by Git."
             }, f, indent=2)
         protect_local_file(tmp_file)
-        if os.path.exists(creds_file):
-            os.replace(tmp_file, creds_file)
-        else:
-            os.rename(tmp_file, creds_file)
+        os.replace(tmp_file, creds_file)
         protect_local_file(creds_file)
     except Exception as e:
         if os.path.exists(tmp_file):
             try: os.unlink(tmp_file)
             except Exception: pass
-        print(f"[WARN] Could not write local credentials file: {e}", file=sys.stderr)
+        if os.path.exists(creds_file):
+            try: os.unlink(creds_file)
+            except Exception: pass
+        raise RuntimeError(f"Cannot safely persist bootstrap credentials to {creds_file}: {e}")
 
     return generated_pass
 
@@ -177,18 +276,28 @@ def migrate_or_rotate_user_credentials(db_path: str, username: str = "alex.chen"
     """
     Rotates credentials for a user in an existing database without deleting, modifying,
     or recreating any tickets or ticket activity logs.
-    Ensures safe persistence and verified ACL protection before updating the database.
+    Transactionally safe and recoverable:
+    - Prepares and protects staged credentials in a temporary file.
+    - Backs up existing credentials file.
+    - Updates user in database within an active transaction.
+    - Atomically publishes new credentials file and reverifies permissions.
+    - Commits database transaction only after verified publication.
+    - Rolls back database and restores previous credential file if any stage fails.
     """
     if not new_password:
         new_password = secrets.token_urlsafe(16)
-    
+
     pwd_hash, salt = hash_password(new_password)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-    # Step 1: Safely persist and protect new credentials FIRST
     dir_name = os.path.dirname(os.path.abspath(creds_file))
-    tmp_file = os.path.join(dir_name, f".tmp_creds_{secrets.token_hex(6)}.json")
+    os.makedirs(dir_name, exist_ok=True)
+    tmp_file = os.path.join(dir_name, f".tmp_rot_{secrets.token_hex(6)}.json")
+    backup_file = os.path.join(dir_name, f".bak_rot_{secrets.token_hex(6)}.json")
+    has_backup = False
+
     try:
+        # 1. Stage new credentials and protect
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump({
                 "username": username,
@@ -197,35 +306,60 @@ def migrate_or_rotate_user_credentials(db_path: str, username: str = "alex.chen"
                 "note": "Local credential store for IT Service Desk. Ignored by Git."
             }, f, indent=2)
         protect_local_file(tmp_file)
+
+        # 2. Backup existing credentials file if present
         if os.path.exists(creds_file):
+            import shutil
+            shutil.copy2(creds_file, backup_file)
+            protect_local_file(backup_file)
+            has_backup = True
+
+        # 3. Connect to database and start transaction
+        conn = sqlite3.connect(db_path)
+        try:
+            c = conn.cursor()
+            c.execute("SELECT id FROM users WHERE username = ?", (username,))
+            row = c.fetchone()
+            if row:
+                c.execute("UPDATE users SET password_hash = ?, salt = ? WHERE username = ?", (pwd_hash, salt, username))
+            else:
+                c.execute("INSERT INTO users (username, full_name, role, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                          (username, "Alex Chen (L1 Lead)", "agent", pwd_hash, salt, now_str))
+
+            # 4. Atomically publish staged credentials
             os.replace(tmp_file, creds_file)
-        else:
-            os.rename(tmp_file, creds_file)
-        protect_local_file(creds_file)
+            protect_local_file(creds_file)
+
+            # 5. Commit database only after verified publication
+            conn.commit()
+        except Exception as tx_err:
+            conn.rollback()
+            # Restore previous credential file if replaced
+            if has_backup and os.path.exists(backup_file):
+                os.replace(backup_file, creds_file)
+                protect_local_file(creds_file)
+            elif not has_backup and os.path.exists(creds_file):
+                try: os.unlink(creds_file)
+                except Exception: pass
+            raise tx_err
+        finally:
+            conn.close()
+
     except Exception as e:
         if os.path.exists(tmp_file):
             try: os.unlink(tmp_file)
             except Exception: pass
-        raise RuntimeError(f"Cannot safely persist credentials to {creds_file}; aborting rotation: {e}")
-
-    # Step 2: Update users table in existing database
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    c.execute("SELECT id, username FROM users WHERE username = ?", (username,))
-    row = c.fetchone()
-    if row:
-        c.execute("""
-        UPDATE users
-        SET password_hash = ?, salt = ?
-        WHERE username = ?
-        """, (pwd_hash, salt, username))
-    else:
-        c.execute("""
-        INSERT INTO users (username, full_name, role, password_hash, salt, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (username, "Alex Chen (L1 Lead)", "agent", pwd_hash, salt, now_str))
-    conn.commit()
-    conn.close()
+        if has_backup and os.path.exists(backup_file):
+            try: os.unlink(backup_file)
+            except Exception: pass
+        raise RuntimeError(f"Transactional credential migration failed: {e}")
+    finally:
+        if os.path.exists(tmp_file):
+            try: os.unlink(tmp_file)
+            except Exception: pass
+        if has_backup and os.path.exists(backup_file):
+            try: os.unlink(backup_file)
+            except Exception: pass
 
     return new_password
 
@@ -307,37 +441,10 @@ def init_db(db_path=DEFAULT_DB_FILE, creds_file=LOCAL_CREDENTIALS_FILE):
             user_id, username, stored_hash, stored_salt = alex_row
             # Check if legacy default password is in use
             if verify_password("NexoraSupport#2026", stored_salt, stored_hash):
-                new_pass = secrets.token_urlsafe(16)
-                new_hash, new_salt = hash_password(new_pass)
-                now_iso = datetime.now(timezone.utc).isoformat()
-                
-                # Step 1: Safely persist and protect the new credentials FIRST
-                dir_name = os.path.dirname(os.path.abspath(creds_file))
-                tmp_file = os.path.join(dir_name, f".tmp_mig_{secrets.token_hex(6)}.json")
-                try:
-                    with open(tmp_file, "w", encoding="utf-8") as f:
-                        json.dump({
-                            "username": "alex.chen",
-                            "bootstrap_password": new_pass,
-                            "migrated_at": now_iso,
-                            "note": "Migrated from legacy credentials. Local secret store protected by OS ACLs."
-                        }, f, indent=2)
-                    protect_local_file(tmp_file)
-                    if os.path.exists(creds_file):
-                        os.replace(tmp_file, creds_file)
-                    else:
-                        os.rename(tmp_file, creds_file)
-                    protect_local_file(creds_file)
-                except Exception as e:
-                    if os.path.exists(tmp_file):
-                        try: os.unlink(tmp_file)
-                        except Exception: pass
-                    conn.close()
-                    raise RuntimeError(f"Cannot safely persist migrated credentials to {creds_file}; aborting credential rotation: {e}")
-
-                # Step 2: Update users table only after verified persistence
-                c.execute("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", (new_hash, new_salt, user_id))
-                conn.commit()
+                conn.close()
+                migrate_or_rotate_user_credentials(db_path, "alex.chen", creds_file=creds_file)
+                conn = sqlite3.connect(db_path)
+                c = conn.cursor()
 
     # Check if seed tickets exist
     c.execute("SELECT COUNT(*) FROM tickets")
@@ -372,12 +479,12 @@ def compute_ticket_sla(ticket: dict, now: datetime = None) -> dict:
     """Computes dynamic elapsed hours, remaining hours, and breach status."""
     if not now:
         now = datetime.now(timezone.utc)
-    
+
     created_dt = parse_iso_datetime(ticket.get("created_at"))
     target_hours = float(ticket.get("sla_target_hours", 72.0))
     status = ticket.get("status", "New")
     resolved_dt = parse_iso_datetime(ticket.get("resolved_at"))
-    
+
     if status in ("Resolved", "Closed") and resolved_dt and created_dt:
         elapsed = max(0.0, (resolved_dt - created_dt).total_seconds() / 3600.0)
         remaining = 0.0
@@ -404,7 +511,7 @@ def compute_ticket_sla(ticket: dict, now: datetime = None) -> dict:
 def seed_tickets(conn):
     c = conn.cursor()
     base_time = datetime(2024, 11, 10, 9, 0, 0, tzinfo=timezone.utc)
-    
+
     sample_tickets = [
         ("NEX-101", "Locked out of Windows account after password change", "Password Reset / Account Unlock", "Kavitha Murthy", "kavitha.murthy@nexora.com", "HR", "Medium", "High", "P2", "Resolved", "Alex Chen", "L1 Service Desk", 0.5, "Account unlocked and bad password cache flushed on smartphone."),
         ("NEX-102", "Outlook fails to connect - stuck on 'Loading Profile'", "Microsoft 365 Client Issue", "Deepak Rao", "deepak.rao@nexora.com", "Finance", "Medium", "Medium", "P3", "Resolved", "Priya Sharma", "L1 Service Desk", 2.0, "Recreated corrupt Outlook profile and rebuilt OST cache."),
@@ -417,7 +524,7 @@ def seed_tickets(conn):
         ("NEX-109", "Suspicious phishing email reporting urgent wire transfer", "Security Incident", "Prasad Joshi", "prasad.joshi@nexora.com", "Operations", "High", "High", "P1", "Resolved", "Rajesh Bhat", "IT Security", 0.5, "Purged phishing email tenant-wide via Defender Explorer and blocked sender domain."),
         ("NEX-110", "New Employee Account Provisioning - Frontend Engineer", "New User Access", "Rajesh Bhat", "rajesh.bhat@nexora.com", "IT", "Low", "High", "P3", "New", "Unassigned", "L1 Service Desk", 0, "New hire onboarding ticket created. Awaiting HR verification.")
     ]
-    
+
     for t in sample_tickets:
         key, title, req_type, caller, email, dept, impact, urgency, priority, status, assignee, group, res_hours, notes = t
         created_dt = base_time + timedelta(hours=int(key.split("-")[1]) % 20)
@@ -427,7 +534,7 @@ def seed_tickets(conn):
         resolved_str = (created_dt + timedelta(hours=res_hours)).strftime("%Y-%m-%d %H:%M:%S") if status == "Resolved" else None
         breached_val = 1 if (res_hours > target_hours) else 0
         customer_tok = secrets.token_urlsafe(24)
-        
+
         c.execute("""
         INSERT INTO tickets (
             key, title, request_type, caller_name, caller_email, department,
@@ -441,18 +548,18 @@ def seed_tickets(conn):
             created_str, created_str, resolved_str, due_str, target_hours, breached_val,
             f"User reported: {title}", notes, customer_tok
         ))
-        
+
         c.execute("""
         INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
         VALUES (?, ?, ?, ?, ?)
         """, (key, created_str, caller, "CUSTOMER_COMMENT", f"Created ticket: {title}"))
-        
+
         if status == "Resolved":
             c.execute("""
             INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
             VALUES (?, ?, ?, ?, ?)
             """, (key, resolved_str, assignee, "STATUS_CHANGE", f"Ticket Resolved. {notes}"))
-            
+
     conn.commit()
 
 class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
@@ -494,7 +601,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             return False
         try:
             parsed = urllib.parse.urlparse(url_str)
-            
+
             # Require origin scheme to match the actual server scheme (reject HTTPS when serving HTTP)
             expected_scheme = "https" if getattr(self.server, "is_ssl", False) else "http"
             if parsed.scheme != expected_scheme:
@@ -505,7 +612,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             server_host = self.server.server_address[0]
             if server_host and server_host != "0.0.0.0":
                 allowed_hosts.add(server_host)
-                
+
             if not parsed.hostname or parsed.hostname not in allowed_hosts:
                 return False
 
@@ -561,7 +668,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
-        
+
         if path == "/" or path == "/portal":
             self.serve_portal()
         elif path == "/agent":
@@ -578,14 +685,14 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             self.api_export_tickets()
         else:
             self.send_error(404, "Page not found")
-            
+
     def do_POST(self):
         if not self.verify_csrf_and_origin():
             return
 
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
-        
+
         try:
             length = int(self.headers.get('content-length', 0))
         except (ValueError, TypeError):
@@ -601,7 +708,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             data = urllib.parse.parse_qs(body)
             data = {k: v[0] for k, v in data.items()}
-            
+
         if path == "/api/auth/login":
             self.api_login(data)
         elif path == "/api/auth/logout":
@@ -618,7 +725,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
     def api_login(self, data):
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
-        
+
         if not username or not password:
             self.send_json({"status": "error", "message": "Username and password are required"}, 400)
             return
@@ -628,7 +735,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         c.execute("SELECT id, username, full_name, role, password_hash, salt FROM users WHERE username = ?", (username,))
         row = c.fetchone()
         conn.close()
-        
+
         if row and verify_password(password, row[5], row[4]):
             token = secrets.token_hex(24)
             expires = datetime.now(timezone.utc) + timedelta(hours=8)
@@ -651,10 +758,10 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             token = cookies.get("nexora_session", [None])[0]
         if not token:
             token = self.headers.get("X-Session-Token")
-            
+
         if token and token in ACTIVE_SESSIONS:
             del ACTIVE_SESSIONS[token]
-            
+
         cookie = "nexora_session=deleted; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
         self.send_json({"status": "success", "message": "Logged out successfully"}, headers=[("Set-Cookie", cookie)])
 
@@ -674,14 +781,14 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        
+
         c.execute("SELECT * FROM tickets ORDER BY id DESC")
         all_rows = [dict(r) for r in c.fetchall()]
         conn.close()
-        
+
         now = datetime.now(timezone.utc)
         computed_tickets = [compute_ticket_sla(t, now) for t in all_rows]
-        
+
         current_user = sess["full_name"]
 
         if queue == "unassigned":
@@ -704,7 +811,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             filtered = [t for t in computed_tickets if t.get("status") in ("Resolved", "Closed")]
         else: # 'all'
             filtered = computed_tickets
-            
+
         self.send_json({"status": "success", "queue": queue, "count": len(filtered), "tickets": filtered})
 
     def api_get_ticket(self, query):
@@ -724,7 +831,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
             self.send_json({"status": "error", "message": "Ticket not found"}, 404)
             return
-            
+
         ticket_dict = dict(ticket)
         sess = self.get_session()
         is_agent = sess and sess.get("role") in ("agent", "admin")
@@ -741,12 +848,12 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         c.execute("SELECT * FROM ticket_activity WHERE ticket_key = ? ORDER BY id ASC", (key,))
         activities = [dict(r) for r in c.fetchall()]
         conn.close()
-        
+
         # Strip internal work notes and security tokens from customer view
         if not is_agent:
             activities = [a for a in activities if a["activity_type"] != "WORK_NOTE"]
             ticket_data.pop("customer_access_token", None)
-            
+
         ticket_data["activities"] = activities
         self.send_json({"status": "success", "ticket": ticket_data})
 
@@ -760,7 +867,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         impact = data.get("impact", "Medium").strip()
         urgency = data.get("urgency", "Medium").strip()
         description = data.get("description", "").strip()
-        
+
         if not title or not caller_name or not caller_email:
             self.send_json({"status": "error", "message": "Missing required fields: title, caller_name, and caller_email are mandatory."}, 400)
             return
@@ -783,25 +890,25 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
 
         if department not in VALID_DEPARTMENTS:
             department = "Operations"
-            
+
         if impact not in ("High", "Medium", "Low"):
             impact = "Medium"
         if urgency not in ("High", "Medium", "Low"):
             urgency = "Medium"
-            
+
         priority = PRIORITY_MATRIX.get((impact, urgency), "P3")
         target_hours = SLA_POLICY[priority]["hours"]
         now_dt = datetime.now(timezone.utc)
         now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
         due_str = (now_dt + timedelta(hours=target_hours)).strftime("%Y-%m-%d %H:%M:%S")
         customer_token = secrets.token_urlsafe(24)
-        
+
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute("SELECT MAX(id) FROM tickets")
         max_id = c.fetchone()[0] or 100
         new_key = f"NEX-{max_id + 1}"
-        
+
         c.execute("""
         INSERT INTO tickets (
             key, title, request_type, caller_name, caller_email, department,
@@ -813,12 +920,12 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             impact, urgency, priority, "New", "Unassigned", "L1 Service Desk",
             now_str, now_str, due_str, target_hours, 0, description, customer_token
         ))
-        
+
         c.execute("""
         INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
         VALUES (?, ?, ?, ?, ?)
         """, (new_key, now_str, caller_name, "CUSTOMER_COMMENT", "Ticket submitted via Nexora Customer Portal"))
-        
+
         conn.commit()
         conn.close()
         self.send_json({
@@ -834,7 +941,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         sess = self.require_agent_auth()
         if not sess:
             return
-            
+
         key = data.get("key", "").strip()
         new_status = data.get("status", "").strip()
         assigned_to = data.get("assigned_to")
@@ -842,7 +949,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         author = sess["full_name"]
         now_dt = datetime.now(timezone.utc)
         now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
-        
+
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -852,9 +959,9 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
             self.send_json({"status": "error", "message": "Ticket not found"}, 404)
             return
-            
+
         current_status = ticket["status"]
-        
+
         # State machine transition enforcement
         if new_status and new_status != current_status:
             allowed = ALLOWED_TRANSITIONS.get(current_status, [])
@@ -865,7 +972,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
                     "message": f"Illegal state transition from '{current_status}' to '{new_status}'. Allowed transitions: {', '.join(allowed)}."
                 }, 400)
                 return
-                
+
             if new_status == "Resolved" and (not resolution or not resolution.strip()):
                 conn.close()
                 self.send_json({
@@ -876,11 +983,11 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
 
         updates = ["updated_at = ?"]
         params = [now_str]
-        
+
         if new_status:
             updates.append("status = ?")
             params.append(new_status)
-            
+
             # Reopening: Transitioning from Resolved or Closed back to In Progress
             if new_status == "In Progress" and current_status in ("Resolved", "Closed"):
                 updates.append("resolved_at = NULL")
@@ -892,7 +999,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
                     breached = 1 if (elapsed > float(ticket["sla_target_hours"])) else 0
                     updates.append("sla_breached = ?")
                     params.append(breached)
-            
+
             # Resolution: Transitioning to Resolved or Closed
             elif new_status == "Resolved":
                 updates.append("resolved_at = ?")
@@ -911,10 +1018,10 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         if resolution is not None:
             updates.append("resolution_notes = ?")
             params.append(resolution.strip())
-            
+
         params.append(key)
         c.execute(f"UPDATE tickets SET {', '.join(updates)} WHERE key = ?", params)
-        
+
         if new_status == "In Progress" and current_status in ("Resolved", "Closed"):
             msg = f"Ticket Reopened by technician {author}. Previous resolution reset; ticket returned to In Progress."
         elif new_status and resolution:
@@ -928,7 +1035,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
         VALUES (?, ?, ?, ?, ?)
         """, (key, now_str, author, "STATUS_CHANGE", msg))
-        
+
         conn.commit()
         conn.close()
         self.send_json({"status": "success", "message": msg, "current_status": new_status or current_status})
@@ -939,7 +1046,7 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         message = data.get("message", "").strip()
         token = data.get("customer_access_token", "").strip()
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        
+
         if not key or not message:
             self.send_json({"status": "error", "message": "Ticket key and comment message cannot be empty"}, 400)
             return
@@ -1003,20 +1110,20 @@ class ServiceDeskHandler(http.server.SimpleHTTPRequestHandler):
         c.execute("SELECT * FROM tickets")
         tickets = [dict(r) for r in c.fetchall()]
         conn.close()
-        
+
         now = datetime.now(timezone.utc)
         computed = [compute_ticket_sla(t, now) for t in tickets]
-        
+
         total = len(computed)
         resolved = len([t for t in computed if t["status"] in ("Resolved", "Closed")])
         open_count = total - resolved
         p1_open = len([t for t in computed if t["priority"] == "P1" and t["status"] not in ("Resolved", "Closed")])
         sla_breached_count = len([t for t in computed if t["sla_breached"] == 1])
         sla_at_risk_count = len([t for t in computed if t["sla_at_risk"] == 1])
-        
+
         within_sla = len([t for t in computed if t["sla_breached"] == 0])
         sla_compliance = f"{(within_sla / total * 100):.1f}%" if total > 0 else "100.0%"
-        
+
         self.send_json({
             "total_tickets": total,
             "resolved_tickets": resolved,
@@ -1720,7 +1827,7 @@ async function postComment(key, type, customMsg) {
 def run_server(host=DEFAULT_HOST, port=DEFAULT_PORT, db_path=DEFAULT_DB_FILE):
     init_db(db_path)
     ServiceDeskHandler.db_path = db_path
-    
+
     server_address = (host, port)
     httpd = socketserver.TCPServer(server_address, ServiceDeskHandler)
     print(f"==================================================================")
@@ -1740,7 +1847,7 @@ if __name__ == "__main__":
     host = DEFAULT_HOST
     port = DEFAULT_PORT
     db = DEFAULT_DB_FILE
-    
+
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
             if arg.startswith("--port="):
@@ -1749,5 +1856,5 @@ if __name__ == "__main__":
                 host = arg.split("=")[1]
             elif arg.startswith("--db="):
                 db = arg.split("=")[1]
-                
+
     run_server(host=host, port=port, db_path=db)

@@ -70,7 +70,7 @@ class TestServerRunner:
     def start(self):
         service_desk_app.init_db(self.db_path)
         service_desk_app.ServiceDeskHandler.db_path = self.db_path
-        
+
         socketserver.TCPServer.allow_reuse_address = True
         self.httpd = socketserver.TCPServer((self.host, self.port), service_desk_app.ServiceDeskHandler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
@@ -390,12 +390,12 @@ def run_tests():
 
         # Test 12: Reopening Lifecycle Regression & Quantitative SLA Recalculation
         log("[TEST 12] Ticket Reopening Lifecycle Regression & SLA Recalculation:")
-        
+
         # Insert controlled historical tickets directly into DB to test both older (overdue) and newer tickets
         ctrl_conn = sqlite3.connect(server.db_path)
         ctrl_cur = ctrl_conn.cursor()
         now_utc = datetime.now(timezone.utc)
-        
+
         # Case A: Controlled Older Overdue Ticket (Created 10h ago, P1 = 4h target, resolved 8h ago at 2h elapsed)
         old_created = (now_utc - timedelta(hours=10)).strftime("%Y-%m-%d %H:%M:%S")
         old_resolved = (now_utc - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
@@ -503,36 +503,37 @@ def run_tests():
         assert len(work_notes) == 0, "Public view leaked internal WORK_NOTE!"
         log("\n[TEST 13] Comment Segregation: Internal work notes protected from public exposure. [PASS]")
 
-        # Test 14: Stored XSS Mitigation & Rendering Sanitization
-        log("\n[TEST 14] Stored XSS Mitigation & Rendering Sanitization:")
-        
+        # Test 14: Stored XSS Mitigation & Headless Browser Automation Release Gate
+        log("\n[TEST 14] Stored XSS Mitigation & Headless Browser Automation Gate:")
+
         # 14a. Verify application's own escapeHtml implementation directly
         def js_escape_html(s):
             if not s: return ''
             return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#039;')
 
         malicious_vectors = [
-            "<script>alert('XSS-TITLE')</script>",
-            "<img src=x onerror=alert(1)>",
-            "\"><svg/onload=alert(document.cookie)>",
-            "' onfocus='alert(1)"
+            "<script>window.__xss_fired='script'; alert('XSS-SCRIPT');</script>",
+            "<img src='invalid_image.jpg' onerror=\"window.__xss_fired='img'; alert('XSS-IMG');\">",
+            "<svg onload=\"window.__xss_fired='svg'; alert('XSS-SVG');\"><circle cx=10 cy=10 r=10 /></svg>",
+            "\" onmouseover=\"window.__xss_fired='attr'; alert('XSS-ATTR');\" autofocus=\""
         ]
         for vec in malicious_vectors:
             esc = js_escape_html(vec)
             assert "<script>" not in esc and "<img" not in esc and "<svg" not in esc
+            assert "<" not in esc and ">" not in esc and '"' not in esc and "'" not in esc
             assert "&lt;" in esc or "&quot;" in esc or "&#039;" in esc
         log("  - Application output-escaping logic verified against 4 distinct injection vectors. [PASS]")
 
-        # 14b. Submit ticket with malicious title, caller_name, description, and comments
-        xss_payload = "<script>window.__xss_fired=true; alert('XSS')</script><img src=x onerror=\"window.__xss_fired=true;\">"
+        # 14b. Submit ticket with all 4 malicious vectors in title, caller_name, description
+        compound_xss = "".join(malicious_vectors)
         code, xss_ticket, _ = http_post(f"{base_url}/api/tickets", {
-            "title": f"Printer Spooler Error {xss_payload}",
-            "caller_name": f"Hacker <script>alert(1)</script>",
-            "caller_email": "attacker@nexora.com",
+            "title": f"Network Gateway Fault {malicious_vectors[0]}",
+            "caller_name": f"Security Auditor {malicious_vectors[3]}",
+            "caller_email": "auditor@nexora.com",
             "department": "IT",
-            "description": f"Detailed description with vector: {xss_payload}"
+            "description": f"Comprehensive injection payload: {compound_xss}"
         })
-        assert code == 200
+        assert code == 200, f"Ticket creation failed with {code}"
         xss_key = xss_ticket["key"]
         xss_token = xss_ticket["customer_access_token"]
 
@@ -540,55 +541,80 @@ def run_tests():
         code, _, _ = http_post(f"{base_url}/api/ticket/comment", {
             "key": xss_key,
             "type": "WORK_NOTE",
-            "message": f"Internal work note payload: {xss_payload}"
+            "message": f"Activity feed vector test: {malicious_vectors[1]} {malicious_vectors[2]}"
         }, headers=auth_headers)
         assert code == 200
 
-        # Verify raw API storage preserved (no backend truncation/corruption)
+        # Verify raw API storage preserved (backend does not corrupt data)
         code, fetched_xss = http_get(f"{base_url}/api/ticket?key={xss_key}", headers=auth_headers)
         assert code == 200
-        assert xss_payload in fetched_xss["ticket"]["description"]
+        assert compound_xss in fetched_xss["ticket"]["description"]
 
-        # 14c. Headless browser verification using Playwright (if available)
-        browser_tested = False
-        try:
-            from playwright.sync_api import sync_playwright
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                alerts = []
-                page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.dismiss()))
+        # 14c. Headless browser verification using Playwright (Mandatory Release Gate)
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            alerts = []
+            page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.dismiss()))
 
-                # Test Customer Portal lookup
-                page.goto(f"{base_url}/portal")
-                page.fill("#trackKey", xss_key)
-                page.fill("#trackToken", xss_token)
-                page.click("button:has-text('Track Ticket')")
-                page.wait_for_timeout(500) # Wait for DOM render
-                xss_fired = page.evaluate("() => window.__xss_fired === true")
-                assert not xss_fired, "XSS executed in Customer Portal!"
-                assert len(alerts) == 0, f"Alert dialog triggered in Customer Portal: {alerts}"
+            # 1. Customer Portal UI Verification
+            page.goto(f"{base_url}/portal")
+            page.fill("#trackKey", xss_key)
+            page.fill("#trackToken", xss_token)
+            page.click("button:has-text('Track Ticket')")
+            page.wait_for_timeout(600)  # Wait for DOM rendering
 
-                # Test Agent Console
-                page.goto(f"{base_url}/agent")
-                page.click("#authBtn")
-                page.fill("#loginUser", "alex.chen")
-                page.fill("#loginPass", DYNAMIC_TEST_PASS)
-                page.click("button[type='submit']:has-text('Sign In')")
-                page.wait_for_selector(".ticket-item")
-                # Click on the malicious ticket
-                page.click(f".ticket-item:has-text('{xss_key}')")
-                page.wait_for_timeout(500)
-                xss_fired_agent = page.evaluate("() => window.__xss_fired === true")
-                assert not xss_fired_agent, "XSS executed in Agent Console!"
-                assert len(alerts) == 0, f"Alert dialog triggered in Agent Console: {alerts}"
+            # Assert zero alerts triggered
+            assert len(alerts) == 0, f"Alert dialog triggered in Customer Portal: {alerts}"
 
-                browser.close()
-                browser_tested = True
-                log("  - Playwright Headless Chromium: Verified zero script execution and zero alerts in Customer Portal and Agent Console DOM. [PASS]")
-        except Exception as e:
-            log(f"  - [NOTICE] Browser execution verification fallback: {e}")
-            log("  - Source-level rendering-sanitization test verified: application escapeHtml transforms all HTML tags into inert character entities. [PASS]")
+            # Assert zero JavaScript execution
+            xss_fired = page.evaluate("() => window.__xss_fired")
+            assert xss_fired is None, f"XSS payload executed in Customer Portal: {xss_fired}"
+
+            # Assert no executable injected DOM elements exist
+            injected_scripts = page.locator("script:has-text('__xss_fired')").count()
+            injected_svgs = page.locator("svg[onload]").count()
+            injected_imgs = page.locator("img[onerror]").count()
+            assert injected_scripts == 0, "Script tag injected into Customer Portal DOM!"
+            assert injected_svgs == 0, "SVG onload injected into Customer Portal DOM!"
+            assert injected_imgs == 0, "Image onerror injected into Customer Portal DOM!"
+            log("  - Playwright Customer Portal: Verified 0 alerts, 0 script executions, and 0 injected executable DOM elements. [PASS]")
+
+            # 2. Agent Console UI Verification
+            page.goto(f"{base_url}/agent")
+            page.click("#authBtn")
+            page.fill("#loginUser", "alex.chen")
+            page.fill("#loginPass", DYNAMIC_TEST_PASS)
+            page.click("button[type='submit']:has-text('Sign In')")
+            page.wait_for_selector(".ticket-item")
+
+            # Select malicious ticket
+            page.click(f".ticket-item:has-text('{xss_key}')")
+            page.wait_for_timeout(600)  # Wait for DOM rendering
+
+            # Assert zero alerts triggered in Agent Console
+            assert len(alerts) == 0, f"Alert dialog triggered in Agent Console: {alerts}"
+
+            # Assert zero JavaScript execution in Agent Console
+            xss_fired_agent = page.evaluate("() => window.__xss_fired")
+            assert xss_fired_agent is None, f"XSS payload executed in Agent Console: {xss_fired_agent}"
+
+            # Post a new malicious comment directly from the Agent Console UI
+            page.fill("#commentBox", f"UI posted vector: {malicious_vectors[2]}")
+            page.click("button:has-text('Work Note')")
+            page.wait_for_timeout(600)
+
+            # Assert still zero alerts and zero script execution
+            assert len(alerts) == 0, f"Alert dialog triggered after adding note in Agent Console: {alerts}"
+            xss_fired_after = page.evaluate("() => window.__xss_fired")
+            assert xss_fired_after is None, f"XSS payload executed after comment in Agent Console: {xss_fired_after}"
+
+            injected_scripts_agent = page.locator("script:has-text('__xss_fired')").count()
+            assert injected_scripts_agent == 0, "Script tag injected into Agent Console DOM!"
+
+            browser.close()
+            log("  - Playwright Agent Console: Verified 0 alerts, 0 script executions, and inert comment rendering. [PASS]")
 
         # Test 15: Verify All 10 Operational Queues
         queues = [
@@ -670,7 +696,7 @@ def run_tests():
         # Insert legacy user with real previous default password 'NexoraSupport#2026'
         legacy_hash, legacy_salt = service_desk_app.hash_password("NexoraSupport#2026")
         c.execute("INSERT INTO users VALUES (1, 'alex.chen', 'Alex Chen (L1 Lead)', 'agent', ?, ?, '2024-11-01 10:00:00')", (legacy_hash, legacy_salt))
-        
+
         # Insert 5 test tickets with complete fields
         for i in range(1, 6):
             tok = secrets.token_urlsafe(24)
@@ -712,7 +738,7 @@ def run_tests():
         c.execute("SELECT password_hash, salt FROM users WHERE username = 'alex.chen'")
         h2, s2 = c.fetchone()
         assert not service_desk_app.verify_password("NexoraSupport#2026", s2, h2), "Old default password 'NexoraSupport#2026' still verified after migration!"
-        
+
         with open(mig_creds, "r", encoding="utf-8") as f:
             migrated_data = json.load(f)
         new_pass = migrated_data["bootstrap_password"]
@@ -735,24 +761,40 @@ def run_tests():
         conn.close()
         log("  - Database Integrity: All 5 ticket records, all activity records, and user count strictly preserved without duplicates. [PASS]")
 
-        # 17c. Windows ACL verification on generated credentials file
+        # 17c. Strict Windows ACL / POSIX permission verification on generated credentials file
         assert os.path.exists(mig_creds), "Migrated credentials file not created"
+        service_desk_app.verify_local_file_permissions(mig_creds)
+        log(f"  - Strict Permissions Verification: Verified fail-closed permissions (SIDs / mode 0600) on {mig_creds}. [PASS]")
+
+        # 17d. Test ACL negative test cases (reject unexpected principals and inherited permissions)
         if os.name == "nt":
             import subprocess
-            acl_check = subprocess.run(["icacls.exe", mig_creds], capture_output=True, text=True)
-            assert acl_check.returncode == 0, f"icacls inspection failed: {acl_check.stderr}"
-            acl_out = acl_check.stdout.upper()
-            username = os.environ.get("USERNAME", "").upper()
-            assert "(F)" in acl_out and username in acl_out, f"Full Control (F) missing for current user in ACL:\n{acl_check.stdout}"
-            assert "BUILTIN\\ADMINISTRATORS:(F)" in acl_out or "ADMINISTRATORS:(F)" in acl_out, f"Administrators missing in ACL:\n{acl_check.stdout}"
-            log(f"  - Windows ACL Inspection: Verified Full Control (F) strictly restricted to {username} and BUILTIN\\Administrators on {mig_creds}. [PASS]")
-        elif hasattr(os, "chmod"):
-            import stat
-            mode = stat.S_IMODE(os.stat(mig_creds).st_mode)
-            assert mode == 0o600, f"Expected chmod 0600, got {oct(mode)}"
-            log(f"  - POSIX Permissions: Verified mode 0600 on {mig_creds}. [PASS]")
+            # Negative Case 1: Unauthorized principal (Everyone:R) MUST fail verification
+            unauth_test_file = os.path.join(migration_temp_dir, "unauth_test.json")
+            with open(unauth_test_file, "w") as f: f.write("{}")
+            service_desk_app.protect_local_file(unauth_test_file)
+            subprocess.run(["icacls.exe", unauth_test_file, "/grant:r", "Everyone:(R)"], capture_output=True)
+            rejected_unauth = False
+            try:
+                service_desk_app.verify_local_file_permissions(unauth_test_file)
+            except PermissionError:
+                rejected_unauth = True
+            assert rejected_unauth, "verify_local_file_permissions failed to reject unauthorized Everyone principal!"
+            log("  - Strict ACL Defense: Successfully rejected unexpected unauthorized principal (Everyone). [PASS]")
 
-        # 17d. Test migration failure handling (atomic rollback / safe persistence)
+            # Negative Case 2: Inherited permissions MUST fail verification
+            inherit_test_file = os.path.join(migration_temp_dir, "inherit_test.json")
+            with open(inherit_test_file, "w") as f: f.write("{}")
+            subprocess.run(["icacls.exe", inherit_test_file, "/inheritance:e"], capture_output=True)
+            rejected_inherit = False
+            try:
+                service_desk_app.verify_local_file_permissions(inherit_test_file)
+            except PermissionError:
+                rejected_inherit = True
+            assert rejected_inherit, "verify_local_file_permissions failed to reject inherited permissions!"
+            log("  - Strict ACL Defense: Successfully rejected enabled inheritance. [PASS]")
+
+        # 17e. Test migration failure handling & transactional rollback
         fail_db = os.path.join(migration_temp_dir, "fail_test.db")
         conn_fail = sqlite3.connect(fail_db)
         c_fail = conn_fail.cursor()
@@ -779,6 +821,18 @@ def run_tests():
         assert service_desk_app.verify_password("NexoraSupport#2026", s_chk, h_chk), "Database password was rotated despite persistence failure!"
         conn_chk.close()
         log("  - Migration Failure Handling: Verified database password is NOT rotated when credentials cannot be safely persisted. [PASS]")
+
+        # 17f. Static code security audit on Samba AD provisioning and password management
+        samba_script_path = os.path.join(PROJECT_ROOT, "scripts", "deploy_samba_ad.py")
+        with open(samba_script_path, "r", encoding="utf-8") as f:
+            samba_code = f.read()
+
+        assert "--adminpass" not in samba_code, "Insecure --adminpass CLI argument detected in deploy_samba_ad.py!"
+        assert "--newpassword" not in samba_code, "Insecure --newpassword CLI argument detected in deploy_samba_ad.py!"
+        assert "samba.netcmd.domain import cmd_domain_provision" in samba_code or "samba.samdb import SamDB" in samba_code, "Native Python Samba provisioning API missing in deploy_samba_ad.py!"
+        assert "chmod 700" in samba_code, "Mode 0700 vault directory missing in deploy_samba_ad.py!"
+        assert "chmod 600" in samba_code, "Mode 0600 secret file permissions missing in deploy_samba_ad.py!"
+        log("  - Samba AD Security Audit: Verified zero CLI password exposure, native Python API usage, and mode 0700/0600 vault isolation. [PASS]")
 
         print("\n" + "=" * 70)
         print("ALL 17 TEST MODULES PASSED WITH 100% SUCCESS (0 FAILURES, 0 RETRIES)")

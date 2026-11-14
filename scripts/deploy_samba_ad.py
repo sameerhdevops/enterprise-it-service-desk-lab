@@ -47,23 +47,127 @@ USER_DEFS = [
     ("akash.desai", "Akash", "Desai", "Senior Sales Manager", "OU=Sales", "GG-Sales")
 ]
 
+def verify_local_file_permissions(filepath: str) -> bool:
+    """
+    Verifies that the target credentials file has strict, fail-closed permissions:
+    - On Windows NTFS:
+      * Inheritance disabled (AreAccessRulesProtected == True)
+      * Explicit Allow permissions granted ONLY to current user SID and BUILTIN\\Administrators (S-1-5-32-544)
+      * Both principals have FullControl
+      * No unexpected Allow or Deny principals exist
+    - On POSIX / Linux:
+      * File mode is strictly 0600 (owner read/write only)
+    Raises PermissionError or RuntimeError if permissions are invalid or verification fails.
+    """
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Target file does not exist: {filepath}")
+
+    if os.name == "nt":
+        ps_check = """
+$path = $env:TARGET_FILE
+$acl = Get-Acl -LiteralPath $path
+$user = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$userSid = $user.User.Value
+$adminSid = "S-1-5-32-544"
+
+$results = @{
+    AreAccessRulesProtected = $acl.AreAccessRulesProtected
+    Rules = @()
+    CurrentUserSid = $userSid
+    AdminSid = $adminSid
+}
+
+foreach ($rule in $acl.Access) {
+    $sid = ""
+    try {
+        $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    } catch {
+        $sid = $rule.IdentityReference.Value
+    }
+    $results.Rules += @{
+        Identity = $rule.IdentityReference.Value
+        Sid = $sid
+        Rights = $rule.FileSystemRights.ToString()
+        AccessControlType = $rule.AccessControlType.ToString()
+        IsInherited = $rule.IsInherited
+    }
+}
+$results | ConvertTo-Json -Depth 5
+"""
+        env = os.environ.copy()
+        env["TARGET_FILE"] = os.path.abspath(filepath)
+        res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_check], env=env, capture_output=True, text=True)
+        if res.returncode != 0:
+            raise PermissionError(f"Failed to query Windows ACL on {filepath}: {res.stderr}")
+
+        try:
+            data = json.loads(res.stdout)
+        except Exception as e:
+            raise PermissionError(f"Could not parse ACL verification output for {filepath}: {e}\n{res.stdout}")
+
+        if not data.get("AreAccessRulesProtected"):
+            raise PermissionError(f"ACL inheritance is NOT disabled on {filepath}")
+
+        user_sid = data.get("CurrentUserSid")
+        admin_sid = data.get("AdminSid")
+        rules = data.get("Rules") or []
+
+        found_user = False
+        found_admin = False
+
+        for r in rules:
+            if r.get("IsInherited"):
+                raise PermissionError(f"Unexpected inherited rule found on {filepath}: {r}")
+            if r.get("AccessControlType") != "Allow":
+                raise PermissionError(f"Unexpected non-Allow rule on {filepath}: {r}")
+
+            sid = r.get("Sid")
+            rights = r.get("Rights", "")
+
+            if sid == user_sid:
+                if rights != "FullControl" and "FullControl" not in rights:
+                    raise PermissionError(f"Current user does not have FullControl on {filepath}: {rights}")
+                found_user = True
+            elif sid == admin_sid:
+                if rights != "FullControl" and "FullControl" not in rights:
+                    raise PermissionError(f"BUILTIN\\Administrators does not have FullControl on {filepath}: {rights}")
+                found_admin = True
+            else:
+                raise PermissionError(f"Unexpected unauthorized principal in ACL on {filepath}: {r.get('Identity')} ({sid})")
+
+        if not found_user:
+            raise PermissionError(f"Current user ({user_sid}) missing from explicit ACL on {filepath}")
+        if not found_admin:
+            raise PermissionError(f"BUILTIN\\Administrators ({admin_sid}) missing from explicit ACL on {filepath}")
+
+        return True
+
+    elif hasattr(os, "chmod"):
+        import stat
+        mode = stat.S_IMODE(os.stat(filepath).st_mode)
+        if mode != 0o600:
+            raise PermissionError(f"POSIX permissions insecure on {filepath}: mode is {oct(mode)}, required 0o600")
+        return True
+
+    return False
+
 def protect_local_file(filepath: str) -> bool:
     """
     Applies restrictive operating system filesystem permissions to a local credentials file:
-    - On Windows NTFS: Uses icacls to remove inheritance and grant Full Control strictly
+    - On Windows NTFS: Uses icacls to remove inheritance (/inheritance:r) and grant Full Control strictly
       to the current user (%USERNAME%) and BUILTIN\\Administrators (*S-1-5-32-544).
-      Captures return code, treats failures as real errors, and verifies the resulting ACL.
+      Then strictly verifies the resulting ACL using SID-based inspection.
     - On POSIX / Linux: Uses chmod 0600 (owner read/write only) and verifies file mode.
     Returns True on success, or raises RuntimeError/PermissionError on failure.
     """
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Target file does not exist: {filepath}")
-    
+
     if os.name == "nt":
         username = os.environ.get("USERNAME")
         if not username:
             raise RuntimeError("Cannot resolve USERNAME environment variable for ACL configuration")
-        
+
         # 1. Apply restrictive ACLs
         res = subprocess.run(
             ["icacls.exe", filepath, "/inheritance:r", "/grant:r", f"{username}:(F)", "/grant:r", "*S-1-5-32-544:(F)"],
@@ -72,25 +176,14 @@ def protect_local_file(filepath: str) -> bool:
         )
         if res.returncode != 0 or "Failed processing 0 files" not in res.stdout:
             raise PermissionError(f"Failed to apply Windows ACLs on {filepath} (code {res.returncode}): {res.stderr or res.stdout}")
-        
-        # 2. Verify resulting ACL
-        verify_res = subprocess.run(["icacls.exe", filepath], capture_output=True, text=True)
-        if verify_res.returncode != 0:
-            raise PermissionError(f"Failed to query ACLs on {filepath} (code {verify_res.returncode}): {verify_res.stderr}")
-        
-        out = verify_res.stdout.upper()
-        if "(F)" not in out or username.upper() not in out:
-            raise PermissionError(f"ACL verification failed for {filepath}. Resulting ACL:\n{verify_res.stdout}")
-        return True
+
+        # 2. Strict SID-based verification
+        return verify_local_file_permissions(filepath)
 
     elif hasattr(os, "chmod"):
-        import stat
         os.chmod(filepath, 0o600)
-        mode = stat.S_IMODE(os.stat(filepath).st_mode)
-        if mode != 0o600:
-            raise PermissionError(f"POSIX permission verification failed for {filepath}: mode is {oct(mode)}, expected 0o600")
-        return True
-    
+        return verify_local_file_permissions(filepath)
+
     return False
 
 def generate_complex_password(length=16) -> str:
@@ -100,14 +193,26 @@ def generate_complex_password(length=16) -> str:
     return f"{core}Nx1!"
 
 def load_or_create_credentials() -> dict:
-    """Loads existing unique account credentials or generates new distinct credentials."""
+    """
+    Loads existing unique account credentials or generates new distinct credentials.
+    Fails closed:
+    - Validates existing credentials JSON structure and all required accounts.
+    - Verifies file permissions before accepting existing file.
+    - Writes any new credentials via temporary file with verified restrictive permissions.
+    - Atomically replaces file and reverifies.
+    """
     creds = {}
     if os.path.exists(CREDENTIALS_FILE):
+        # Ensure existing credentials file is protected with restrictive OS permissions
+        protect_local_file(CREDENTIALS_FILE)
         try:
             with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
                 creds = json.load(f)
-        except Exception:
-            creds = {}
+        except Exception as e:
+            raise ValueError(f"Credentials file {CREDENTIALS_FILE} is corrupt: {e}")
+
+        if not isinstance(creds, dict):
+            raise ValueError(f"Credentials file {CREDENTIALS_FILE} must contain a JSON object")
 
     changed = False
     if "Administrator" not in creds:
@@ -120,12 +225,18 @@ def load_or_create_credentials() -> dict:
             changed = True
 
     if changed or not os.path.exists(CREDENTIALS_FILE):
+        tmp_file = os.path.join(EVIDENCE_DIR, f".tmp_ad_creds_{secrets.token_hex(6)}.json")
         try:
-            with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(creds, f, indent=2)
+            protect_local_file(tmp_file)
+            os.replace(tmp_file, CREDENTIALS_FILE)
             protect_local_file(CREDENTIALS_FILE)
         except Exception as e:
-            print(f"[WARN] Could not write credentials file: {e}", file=sys.stderr)
+            if os.path.exists(tmp_file):
+                try: os.unlink(tmp_file)
+                except Exception: pass
+            raise RuntimeError(f"Cannot safely persist Samba credentials to {CREDENTIALS_FILE}: {e}")
 
     return creds
 
@@ -175,18 +286,39 @@ def main():
                 print(f"[ERROR] Failed to start Samba daemon: {res.stderr}", file=sys.stderr)
                 sys.exit(1)
     else:
-        print("\n[INIT] Domain not detected. Provisioning fresh Samba 4 AD DC...")
-        # Transport password via stdin
+        print("\n[INIT] Domain not detected. Provisioning fresh Samba 4 AD DC via native Python API...")
+        # Native Python provisioning using sys.stdin to eliminate command-line password exposure
         provision_script = """
-        set -e
-        ADMIN_PASS=$(cat)
-        samba-tool domain provision \\
-            --use-rfc2307 \\
-            --realm=NEXORA.TEST \\
-            --domain=NEXORA \\
-            --server-role=dc \\
-            --dns-backend=SAMBA_INTERNAL \\
-            --adminpass="$ADMIN_PASS"
+        python3 - << 'PY_PROV'
+import sys
+from samba.netcmd.domain import cmd_domain_provision
+from samba.getopt import SambaOptions
+from optparse import OptionParser
+
+admin_pass = sys.stdin.readline().strip()
+if not admin_pass:
+    print("[ERROR] Administrator password cannot be empty", file=sys.stderr)
+    sys.exit(1)
+
+cmd = cmd_domain_provision()
+parser = OptionParser()
+sambaopts = SambaOptions(parser)
+
+try:
+    cmd.run(
+        sambaopts=sambaopts,
+        domain="NEXORA",
+        realm="NEXORA.TEST",
+        server_role="dc",
+        dns_backend="SAMBA_INTERNAL",
+        adminpass=admin_pass,
+        use_rfc2307=True,
+        interactive=False
+    )
+except Exception as e:
+    print(f"[ERROR] Native domain provision failed: {e}", file=sys.stderr)
+    sys.exit(1)
+PY_PROV
         samba -D
         sleep 2
         """
@@ -195,11 +327,15 @@ def main():
             print(f"[ERROR] Domain provisioning failed: {res.stderr}\n{res.stdout}", file=sys.stderr)
             sys.exit(1)
 
-    # 3. Transport credentials securely into WSL temporary vault (mode 600, cleaned on exit)
+    # 3. Transport credentials securely into WSL temporary vault (mode 0700 dir, mode 0600 file, cleaned on exit)
     vault_script = """
-    set -e
-    cat > /tmp/.ad_vault.json
-    chmod 600 /tmp/.ad_vault.json
+    set -euo pipefail
+    VAULT_DIR="/tmp/samba_vault_nexora"
+    rm -rf "$VAULT_DIR"
+    mkdir -p "$VAULT_DIR"
+    chmod 700 "$VAULT_DIR"
+    cat > "$VAULT_DIR/vault.json"
+    chmod 600 "$VAULT_DIR/vault.json"
     """
     res = run_wsl_cmd(vault_script, input_data=json.dumps(creds))
     if res.returncode != 0:
@@ -207,7 +343,7 @@ def main():
         sys.exit(1)
 
     import atexit
-    atexit.register(lambda: run_wsl_cmd("rm -f /tmp/.ad_vault.json /tmp/.auth_* /tmp/.alex_pass /tmp/test_*.txt"))
+    atexit.register(lambda: run_wsl_cmd("rm -rf /tmp/samba_vault_nexora /tmp/test_*.txt /tmp/ad-audit.txt"))
 
     # 4. Synchronize Administrator and Domain Users safely using direct Python SamDB API inside WSL
     print("\n--> [Step 1/5] Synchronizing Administrator and 12 Domain Accounts...")
@@ -218,7 +354,7 @@ from samba.samdb import SamDB
 from samba.auth import system_session
 from samba.param import LoadParm
 
-with open('/tmp/.ad_vault.json') as f:
+with open('/tmp/samba_vault_nexora/vault.json') as f:
     creds = json.load(f)
 
 lp = LoadParm()
@@ -284,7 +420,7 @@ PY_SYNC
     res = run_wsl_cmd(sync_script)
     if res.returncode != 0:
         print(f"[ERROR] User synchronization failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
-        run_wsl_cmd("rm -f /tmp/.ad_vault.json")
+        run_wsl_cmd("rm -rf /tmp/samba_vault_nexora")
         sys.exit(1)
     print("     " + res.stdout.strip())
 
@@ -371,7 +507,7 @@ PY_AGDLP
     shares_setup_script = """
     set -e
     mkdir -p /srv/shares/company_shared /srv/shares/hr /srv/shares/finance /srv/shares/it
-    
+
     # Restrictive filesystem permissions (Replacing world-writable chmod 777)
     chown root:root /srv/shares
     chmod 755 /srv/shares
@@ -427,117 +563,149 @@ SMB_CONFIG
     res = run_wsl_cmd(shares_setup_script)
     if res.returncode != 0:
         print(f"[ERROR] SMB share setup failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
-        run_wsl_cmd("rm -f /tmp/.ad_vault.json")
+        run_wsl_cmd("rm -rf /tmp/samba_vault_nexora")
         sys.exit(1)
     print("     " + res.stdout.strip())
 
-    # 7. DNS Hygiene: Remove Stale Host Records with Strict Assertions
+    # 7. DNS Hygiene: Remove Stale Host Records with Fail-Closed Assertions
     print("\n--> [Step 4/5] Auditing & Purging Stale DNS Registrations...")
     dns_cleanup_script = """
-    set -e
-    # 1. Retrieve current eth0 IPv4 address
-    DC_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}')
-    if [ -z "$DC_IP" ]; then
-        echo "[ERROR] Could not determine live DC IPv4 address on eth0." >&2
-        exit 1
-    fi
-    echo "[INFO] Live DC IPv4 Address: $DC_IP"
+    python3 - << 'PY_DNS'
+import subprocess, re, sys
 
-    # 2. Query all existing A records for softwaresamee in nexora.test
-    EXISTING_A=$(samba-tool dns query 127.0.0.1 nexora.test softwaresamee A -P | grep -oP '(?<=A:\\s)\\d+(\\.\\d+){3}' || true)
-    echo "[INFO] Registered A records for softwaresamee: $EXISTING_A"
+# 1. Retrieve current eth0 IPv4 address
+try:
+    ip_res = subprocess.run(["ip", "-4", "addr", "show", "eth0"], capture_output=True, text=True, check=True)
+except subprocess.CalledProcessError as e:
+    print(f"[ERROR] Could not inspect eth0 interface: {e}", file=sys.stderr)
+    sys.exit(1)
 
-    # 3. Purge stale records with verified command return code (no silent failure)
-    for ip in $EXISTING_A; do
-        if [ "$ip" != "$DC_IP" ]; then
-            echo "[PURGE] Removing stale DNS A record: softwaresamee -> $ip"
-            samba-tool dns delete 127.0.0.1 nexora.test softwaresamee A "$ip" -P
-        fi
-    done
+match = re.search(r"inet\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)", ip_res.stdout)
+if not match:
+    print("[ERROR] Could not determine live DC IPv4 address on eth0.", file=sys.stderr)
+    sys.exit(1)
 
-    # 4. Strict post-cleanup verification: assert exclusively live DC IP remains
-    FINAL_A=$(samba-tool dns query 127.0.0.1 nexora.test softwaresamee A -P | grep -oP '(?<=A:\\s)\\d+(\\.\\d+){3}')
-    echo "[INFO] Verified A records after purge: $FINAL_A"
-    
-    if [ "$FINAL_A" != "$DC_IP" ]; then
-        echo "[SECURITY FAILURE] Stale DNS records remain: '$FINAL_A' (expected strictly '$DC_IP')" >&2
-        exit 1
-    fi
-    echo "[OK] DNS A-record hygiene verified: softwaresamee.nexora.test resolves exclusively to live DC IP $DC_IP."
+dc_ip = match.group(1)
+print(f"[INFO] Live DC IPv4 Address: {dc_ip}")
+
+# 2. Query all existing A records for softwaresamee in nexora.test
+query_cmd = ["samba-tool", "dns", "query", "127.0.0.1", "nexora.test", "softwaresamee", "A", "-P"]
+q_res = subprocess.run(query_cmd, capture_output=True, text=True)
+if q_res.returncode != 0:
+    print(f"[ERROR] DNS query failed (code {q_res.returncode}): {q_res.stderr}", file=sys.stderr)
+    sys.exit(1)
+
+registered_ips = re.findall(r"A:\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)", q_res.stdout)
+print(f"[INFO] Registered A records for softwaresamee: {registered_ips}")
+
+if not registered_ips:
+    print("[ERROR] DNS query returned zero A records for softwaresamee.nexora.test", file=sys.stderr)
+    sys.exit(1)
+
+# 3. Purge stale records with verified command return code (fail-closed on error)
+for ip in registered_ips:
+    if ip != dc_ip:
+        print(f"[PURGE] Removing stale DNS A record: softwaresamee -> {ip}")
+        del_cmd = ["samba-tool", "dns", "delete", "127.0.0.1", "nexora.test", "softwaresamee", "A", ip, "-P"]
+        del_res = subprocess.run(del_cmd, capture_output=True, text=True)
+        if del_res.returncode != 0:
+            print(f"[ERROR] Failed to delete stale DNS A record {ip} (code {del_res.returncode}): {del_res.stderr}", file=sys.stderr)
+            sys.exit(1)
+
+# 4. Strict post-cleanup verification: assert exclusively live DC IP remains
+verify_res = subprocess.run(query_cmd, capture_output=True, text=True)
+if verify_res.returncode != 0:
+    print(f"[ERROR] Post-cleanup DNS query failed (code {verify_res.returncode}): {verify_res.stderr}", file=sys.stderr)
+    sys.exit(1)
+
+final_ips = re.findall(r"A:\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)", verify_res.stdout)
+print(f"[INFO] Verified A records after purge: {final_ips}")
+
+if set(final_ips) != {dc_ip}:
+    print(f"[SECURITY FAILURE] Stale DNS records remain: {final_ips} (expected strictly [{dc_ip}])", file=sys.stderr)
+    sys.exit(1)
+
+print(f"[OK] DNS A-record hygiene verified: softwaresamee.nexora.test resolves exclusively to live DC IP {dc_ip}.")
+PY_DNS
     """
     res = run_wsl_cmd(dns_cleanup_script)
     if res.returncode != 0:
         print(f"[ERROR] DNS hygiene verification failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
-        run_wsl_cmd("rm -f /tmp/.ad_vault.json")
+        run_wsl_cmd("rm -rf /tmp/samba_vault_nexora")
         sys.exit(1)
     print("     " + res.stdout.strip())
 
     # 8. Rigorous Audit & Verification
     print("\n--> [Step 5/5] Executing Forensic AGDLP & Access Control Audit...")
     audit_script = """
-    set -e
-    trap 'rm -f /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.alex_pass /tmp/.ad_vault.json /tmp/test_*.txt' EXIT INT TERM HUP
+    set -euo pipefail
+    VAULT_DIR="/tmp/samba_vault_nexora"
+    trap 'rm -rf "$VAULT_DIR" /tmp/test_*.txt' EXIT INT TERM HUP
     OUT="/tmp/ad-audit.txt"
     echo "=== DOMAIN CONTROLLER STATUS ===" > "$OUT"
     samba-tool domain level show >> "$OUT" 2>&1
 
-    echo -e "\n=== PASSWORD AND LOCKOUT POLICY ===" >> "$OUT"
+    echo -e "\\n=== PASSWORD AND LOCKOUT POLICY ===" >> "$OUT"
     samba-tool domain passwordsettings show >> "$OUT" 2>&1
 
-    echo -e "\n=== DOMAIN USERS REGISTER ===" >> "$OUT"
+    echo -e "\\n=== DOMAIN USERS REGISTER ===" >> "$OUT"
     samba-tool user list >> "$OUT" 2>&1
 
-    echo -e "\n=== AGDLP GLOBAL GROUP MEMBERSHIP (GG-HR) ===" >> "$OUT"
+    echo -e "\\n=== AGDLP GLOBAL GROUP MEMBERSHIP (GG-HR) ===" >> "$OUT"
     samba-tool group listmembers GG-HR >> "$OUT" 2>&1
 
-    echo -e "\n=== AGDLP DOMAIN LOCAL GROUP MEMBERSHIP (DL-HR-Private-RW) ===" >> "$OUT"
+    echo -e "\\n=== AGDLP DOMAIN LOCAL GROUP MEMBERSHIP (DL-HR-Private-RW) ===" >> "$OUT"
     samba-tool group listmembers DL-HR-Private-RW >> "$OUT" 2>&1
 
-    echo -e "\n=== ALL STAFF GLOBAL GROUP MEMBERSHIP (GG-All-Staff) ===" >> "$OUT"
+    echo -e "\\n=== ALL STAFF GLOBAL GROUP MEMBERSHIP (GG-All-Staff) ===" >> "$OUT"
     samba-tool group listmembers GG-All-Staff >> "$OUT" 2>&1
 
-    echo -e "\n=== DNS SRV RECORD RESOLUTION (_ldap._tcp.nexora.test) ===" >> "$OUT"
+    echo -e "\\n=== DNS SRV RECORD RESOLUTION (_ldap._tcp.nexora.test) ===" >> "$OUT"
     dig @::1 _ldap._tcp.nexora.test SRV +short >> "$OUT" 2>&1
 
-    echo -e "\n=== DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===" >> "$OUT"
+    echo -e "\\n=== DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===" >> "$OUT"
     TARGET_HOST=$(dig @::1 _ldap._tcp.nexora.test SRV +short | awk '{print $4}' | sed 's/\\.$//')
     dig @::1 "$TARGET_HOST" A +short >> "$OUT" 2>&1
 
-    # Extract credentials for testing from vault
+    # Extract credentials for testing from vault directory
     python3 - << 'PY_AUTH_PREP'
-import json
-with open('/tmp/.ad_vault.json') as f:
+import json, os
+vault_dir = '/tmp/samba_vault_nexora'
+with open(os.path.join(vault_dir, 'vault.json')) as f:
     creds = json.load(f)
 
 for role, user in [("hr", "kavitha.murthy"), ("fin", "deepak.rao"), ("it", "alex.chen")]:
-    with open(f'/tmp/.auth_{role}', 'w') as af:
+    auth_path = os.path.join(vault_dir, f'auth_{role}')
+    with open(auth_path, 'w') as af:
         af.write(f"username={user}\\npassword={creds[user]}\\ndomain=NEXORA\\n")
+    os.chmod(auth_path, 0o600)
 
-with open('/tmp/.alex_pass', 'w') as pf:
+alex_pass_path = os.path.join(vault_dir, 'alex_pass')
+with open(alex_pass_path, 'w') as pf:
     pf.write(creds['alex.chen'])
+os.chmod(alex_pass_path, 0o600)
 PY_AUTH_PREP
-    chmod 600 /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.alex_pass
 
-    echo -e "\n=== KERBEROS TICKET ACQUISITION (alex.chen@NEXORA.TEST) ===" >> "$OUT"
-    cat /tmp/.alex_pass | kinit alex.chen@NEXORA.TEST >/dev/null 2>&1
+    echo -e "\\n=== KERBEROS TICKET ACQUISITION (alex.chen@NEXORA.TEST) ===" >> "$OUT"
+    cat "$VAULT_DIR/alex_pass" | kinit alex.chen@NEXORA.TEST >/dev/null 2>&1
     klist >> "$OUT" 2>&1
-    rm -f /tmp/.alex_pass
+    rm -f "$VAULT_DIR/alex_pass"
 
-    echo -e "\n=== SMB SHARES DISCOVERY ===" >> "$OUT"
-    smbclient -L localhost -A /tmp/.auth_it 2>&1 | grep -E "Disk|IPC" >> "$OUT" 2>&1
+    echo -e "\\n=== SMB SHARES DISCOVERY ===" >> "$OUT"
+    smbclient -L localhost -A "$VAULT_DIR/auth_it" 2>&1 | grep -E "Disk|IPC" >> "$OUT" 2>&1
 
-    echo -e "\n=== AUTHORIZED SHARE WRITE TEST (alex.chen -> CompanyShared) ===" >> "$OUT"
+    echo -e "\\n=== AUTHORIZED SHARE WRITE TEST (alex.chen -> CompanyShared) ===" >> "$OUT"
     echo "Nexora Company Policy - General Access" > /tmp/test_shared.txt
-    smbclient //localhost/CompanyShared -A /tmp/.auth_it -c "put /tmp/test_shared.txt test_policy.txt; ls; rm test_policy.txt" >> "$OUT" 2>&1
+    smbclient //localhost/CompanyShared -A "$VAULT_DIR/auth_it" -c "put /tmp/test_shared.txt test_policy.txt; ls; rm test_policy.txt" >> "$OUT" 2>&1
     rm -f /tmp/test_shared.txt
 
-    echo -e "\n=== AUTHORIZED SHARE WRITE TEST (HR User kavitha.murthy -> HR-Private) ===" >> "$OUT"
+    echo -e "\\n=== AUTHORIZED SHARE WRITE TEST (HR User kavitha.murthy -> HR-Private) ===" >> "$OUT"
     echo "Confidential HR Records" > /tmp/test_hr.txt
-    smbclient //localhost/HR-Private -A /tmp/.auth_hr -c "put /tmp/test_hr.txt hr_doc.txt; ls; rm hr_doc.txt" >> "$OUT" 2>&1
+    smbclient //localhost/HR-Private -A "$VAULT_DIR/auth_hr" -c "put /tmp/test_hr.txt hr_doc.txt; ls; rm hr_doc.txt" >> "$OUT" 2>&1
     rm -f /tmp/test_hr.txt
 
-    echo -e "\n=== DENIED ACCESS TEST (Finance User deepak.rao -> HR-Private) ===" >> "$OUT"
-    DENY_HR_OUT=$(smbclient //localhost/HR-Private -A /tmp/.auth_fin -c "ls" 2>&1 || true)
+    echo -e "\\n=== DENIED ACCESS TEST (Finance User deepak.rao -> HR-Private) ===" >> "$OUT"
+    DENY_HR_OUT=$(smbclient //localhost/HR-Private -A "$VAULT_DIR/auth_fin" -c "ls" 2>&1 || true)
     if echo "$DENY_HR_OUT" | grep -q "NT_STATUS_ACCESS_DENIED"; then
         echo "tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)" >> "$OUT"
     else
@@ -545,13 +713,13 @@ PY_AUTH_PREP
         exit 1
     fi
 
-    echo -e "\n=== AUTHORIZED SHARE WRITE TEST (Finance User deepak.rao -> Finance-Private) ===" >> "$OUT"
+    echo -e "\\n=== AUTHORIZED SHARE WRITE TEST (Finance User deepak.rao -> Finance-Private) ===" >> "$OUT"
     echo "Quarterly Financial Statements" > /tmp/test_fin.txt
-    smbclient //localhost/Finance-Private -A /tmp/.auth_fin -c "put /tmp/test_fin.txt fin_report.txt; ls; rm fin_report.txt" >> "$OUT" 2>&1
+    smbclient //localhost/Finance-Private -A "$VAULT_DIR/auth_fin" -c "put /tmp/test_fin.txt fin_report.txt; ls; rm fin_report.txt" >> "$OUT" 2>&1
     rm -f /tmp/test_fin.txt
 
-    echo -e "\n=== DENIED ACCESS TEST (HR User kavitha.murthy -> IT-Admin) ===" >> "$OUT"
-    DENY_IT_OUT=$(smbclient //localhost/IT-Admin -A /tmp/.auth_hr -c "ls" 2>&1 || true)
+    echo -e "\\n=== DENIED ACCESS TEST (HR User kavitha.murthy -> IT-Admin) ===" >> "$OUT"
+    DENY_IT_OUT=$(smbclient //localhost/IT-Admin -A "$VAULT_DIR/auth_hr" -c "ls" 2>&1 || true)
     if echo "$DENY_IT_OUT" | grep -q "NT_STATUS_ACCESS_DENIED"; then
         echo "tree connect failed: NT_STATUS_ACCESS_DENIED (Access correctly blocked)" >> "$OUT"
     else
@@ -559,9 +727,9 @@ PY_AUTH_PREP
         exit 1
     fi
 
-    echo -e "\n=== AUTHORIZED SHARE WRITE TEST (IT User alex.chen -> IT-Admin) ===" >> "$OUT"
+    echo -e "\\n=== AUTHORIZED SHARE WRITE TEST (IT User alex.chen -> IT-Admin) ===" >> "$OUT"
     echo "IT Infrastructure Runbook" > /tmp/test_it.txt
-    smbclient //localhost/IT-Admin -A /tmp/.auth_it -c "put /tmp/test_it.txt it_doc.txt; ls; rm it_doc.txt" >> "$OUT" 2>&1
+    smbclient //localhost/IT-Admin -A "$VAULT_DIR/auth_it" -c "put /tmp/test_it.txt it_doc.txt; ls; rm it_doc.txt" >> "$OUT" 2>&1
     rm -f /tmp/test_it.txt
 
     cat "$OUT"
@@ -569,7 +737,7 @@ PY_AUTH_PREP
     res = run_wsl_cmd(audit_script)
     if res.returncode != 0:
         print(f"[ERROR] Audit verification failed:\n{res.stderr}\n{res.stdout}", file=sys.stderr)
-        run_wsl_cmd("rm -f /tmp/.auth_hr /tmp/.auth_fin /tmp/.auth_it /tmp/.ad_vault.json")
+        run_wsl_cmd("rm -rf /tmp/samba_vault_nexora")
         sys.exit(1)
 
     evidence_file = os.path.join(EVIDENCE_DIR, "samba-ad-dc-verification.txt")
@@ -578,7 +746,7 @@ PY_AUTH_PREP
 
     print(f"\n[EVIDENCE WRITTEN] Sanitized verification report written to: {evidence_file}")
     print("\nSamba 4 Active Directory configuration and AGDLP verification completed successfully!")
-    run_wsl_cmd("rm -f /tmp/.ad_vault.json /tmp/.auth_* /tmp/.alex_pass /tmp/test_*.txt")
+    run_wsl_cmd("rm -rf /tmp/samba_vault_nexora /tmp/test_*.txt")
 
 if __name__ == "__main__":
     main()
