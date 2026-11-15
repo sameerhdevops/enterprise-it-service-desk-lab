@@ -161,15 +161,9 @@ The reporting generator (`reporting/report-generator.py`) processes the canonica
 
 ---
 
-## 15. What Was Not Implemented (Honest Project Limitations)
-### Lab Scope & Technical Boundaries
-- **No Commercial SaaS Deployment:** ServiceNow and Jira Service Management are documented as operational reference guides and field-mapping architectures; no live production SaaS subscriptions are attached.
-- **No Microsoft 365 Tenant Administration:** M365 work is focused on client-side desktop diagnostics (PowerShell inspection of Office C2R, Teams local cache, OneDrive process states, and cloud endpoint TCP 443 socket reachability), not global tenant administration.
-- **No Compiled Cisco Packet Tracer Binary:** Cisco IOS configurations are syntax-checked reference configuration drafts implementing a 3-VLAN design (VLAN 10 Corporate Users, VLAN 20 Server Farm, VLAN 99 Management); the project does not include a verified `.pkt` binary simulator file.
-- **Local Loopback Packet Capture:** The PCAP file captures traffic across the local Linux loopback interface (`lo`), not a physical corporate switch fabric or physical LAN cable.
-- **Learning Lab Scope:** The custom Python service desk application is an educational learning tool and is not intended for commercial production deployment.
-- **Historical Security Disclosure:** Early repository drafts contained static placeholder credentials that have been invalidated locally and replaced with dynamically generated random credentials (`.local_credentials.json` and `.ad_credentials.json`, protected by restricted filesystem permissions, using POSIX mode 0600 on Linux and explicit NTFS ACLs on Windows, git-ignored). An automated migration in `init_db()` rotates legacy database password hashes on startup. Because historical Git commits retain early drafts, users should treat all historical commit values as publicly known.
+## 15. Project Scope and Limitations
 
+This is a self-directed learning project. Some components are implemented and tested locally, while others are provided as reference documentation or simulated data. For the implementation status and technical boundaries of each component, see the [Project Scope & Technical Truth Register](project-scope.md).
 ---
 
 ## Live Demonstrable vs. Reference Practice
