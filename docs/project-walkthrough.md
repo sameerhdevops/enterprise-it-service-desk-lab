@@ -59,7 +59,22 @@ Priority is calculated using a standard 3×3 ITIL Priority Matrix:
 
 ---
 
-## 7. How the SLA Is Calculated
+## 7. Ticket Lifecycle State Machine & SLA Calculation
+
+### State Machine Enforcement (`ALLOWED_TRANSITIONS`)
+The service desk application enforces a strict 7-state lifecycle state machine defined in `ALLOWED_TRANSITIONS` (`itsm/portal/app.py`):
+- **Allowed States:** `New`, `Assigned`, `In Progress`, `Waiting for Customer`, `Waiting for Vendor`, `Resolved`, `Closed`.
+- **Allowed Transitions:**
+  - `New` $\rightarrow$ `Assigned`, `In Progress`
+  - `Assigned` $\rightarrow$ `In Progress`, `Waiting for Customer`, `Waiting for Vendor`
+  - `In Progress` $\rightarrow$ `Waiting for Customer`, `Waiting for Vendor`, `Resolved`
+  - `Waiting for Customer` $\rightarrow$ `In Progress`, `Resolved`
+  - `Waiting for Vendor` $\rightarrow$ `In Progress`, `Resolved`
+  - `Resolved` $\rightarrow$ `Closed`, `In Progress` (Reopened)
+  - `Closed` $\rightarrow$ `In Progress` (Reopened)
+- **Illegal Transitions Blocked:** Any attempt to jump states outside `ALLOWED_TRANSITIONS` (such as `New` $\rightarrow$ `Closed`) is rejected with an HTTP 400 error.
+
+### How the SLA Is Calculated
 In this learning lab, SLA resolution targets are calculated using **continuous elapsed clock hours**:
 - **P1 (Critical):** 4 elapsed hours
 - **P2 (High):** 8 elapsed hours
@@ -72,8 +87,9 @@ In this learning lab, SLA resolution targets are calculated using **continuous e
 - $\text{Remaining Hours} = \max(0.0, \text{Target Hours} - \text{Elapsed Hours})$
 - If $\text{Elapsed Hours} > \text{Target Hours}$, the ticket is flagged as **Breached** (`sla_breached = 1`).
 
-**Continuous Clock on Reopening:**
-If a resolved ticket is reopened (moved back to *In Progress*), the resolution timestamp is cleared to `NULL`, and elapsed time continues accumulating from the original ticket creation timestamp (`created_at`). Reopening does not reset the clock to zero.
+**Continuous Clock on Waiting States & Reopening:**
+- **No Clock Pause on Waiting:** Waiting states (`Waiting for Customer`, `Waiting for Vendor`) do not halt the SLA clock; elapsed hours accumulate continuously 24x7.
+- **Continuous Clock on Reopening:** If a resolved or closed ticket is reopened, it transitions directly back to `In Progress`. The resolution timestamp is cleared to `NULL`, and elapsed time continues accumulating from the original ticket creation timestamp (`created_at`). Reopening does not reset the clock to zero.
 
 ---
 
@@ -146,13 +162,13 @@ The reporting generator (`reporting/report-generator.py`) processes the canonica
 ---
 
 ## 15. What Was Not Implemented (Honest Project Limitations)
-To maintain complete integrity during technical interviews:
+### Lab Scope & Technical Boundaries
 - **No Commercial SaaS Deployment:** ServiceNow and Jira Service Management are documented as operational reference guides and field-mapping architectures; no live production SaaS subscriptions are attached.
 - **No Microsoft 365 Tenant Administration:** M365 work is focused on client-side desktop diagnostics (PowerShell inspection of Office C2R, Teams local cache, OneDrive process states, and cloud endpoint TCP 443 socket reachability), not global tenant administration.
 - **No Compiled Cisco Packet Tracer Binary:** Cisco IOS configurations are syntax-checked reference configuration drafts implementing a 3-VLAN design (VLAN 10 Corporate Users, VLAN 20 Server Farm, VLAN 99 Management); the project does not include a verified `.pkt` binary simulator file.
 - **Local Loopback Packet Capture:** The PCAP file captures traffic across the local Linux loopback interface (`lo`), not a physical corporate switch fabric or physical LAN cable.
 - **Learning Lab Scope:** The custom Python service desk application is an educational learning tool and is not intended for commercial production deployment.
-- **Historical Security Disclosure:** Early repository drafts contained static placeholder credentials that have been invalidated locally and replaced with dynamically generated random credentials (`.local_credentials.json` and `.ad_credentials.json`, mode 0600, git-ignored). An automated migration in `init_db()` rotates legacy database password hashes on startup. Because historical Git commits retain early drafts, users should treat all historical commit values as publicly known.
+- **Historical Security Disclosure:** Early repository drafts contained static placeholder credentials that have been invalidated locally and replaced with dynamically generated random credentials (`.local_credentials.json` and `.ad_credentials.json`, protected by restricted filesystem permissions, using POSIX mode 0600 on Linux and explicit NTFS ACLs on Windows, git-ignored). An automated migration in `init_db()` rotates legacy database password hashes on startup. Because historical Git commits retain early drafts, users should treat all historical commit values as publicly known.
 
 ---
 

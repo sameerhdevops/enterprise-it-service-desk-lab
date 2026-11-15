@@ -1,200 +1,145 @@
-# Ticket Lifecycle
+# Ticket Lifecycle & State Machine
 
 > **Nexora Technologies — IT Service Desk**
-> Complete ticket status flow and transition rules.
+> Operational ticket status flow, state transitions, and continuous SLA clock rules.
 
 ## Overview
 
-Every ticket in the ITSM system follows a defined lifecycle. Each status has a clear meaning, and transitions between statuses happen under specific conditions. This prevents tickets from sitting in limbo and ensures nothing falls through the cracks.
+Every ticket in the Nexora Service Desk application (`itsm/portal/app.py`) follows a strictly enforced 7-state lifecycle state machine. Transitions are validated on the backend via `ALLOWED_TRANSITIONS`; any illegal jump (e.g., attempting to transition directly from `New` to `Closed`) is rejected with an HTTP 400 response.
 
-## Ticket Statuses
+## Valid Ticket States
 
-| Status | Meaning | Who Owns It |
-|--------|---------|-------------|
-| **New** | Ticket just created, not yet picked up by anyone | Unassigned (queue) |
-| **Assigned** | An analyst has been assigned but hasn't started work | Assigned analyst |
-| **In Progress** | Active investigation or resolution underway | Assigned analyst |
-| **Pending** | Work paused, waiting for something external | Assigned analyst (monitoring) |
-| **Resolved** | Fix applied, waiting for user confirmation | Assigned analyst |
-| **Closed** | Issue confirmed resolved, ticket finalized | System / analyst |
+The application defines seven operational states:
 
-### Pending Sub-statuses
+| Status | Meaning | Operational Ownership |
+|--------|---------|-----------------------|
+| **New** | Ticket created via portal or API; triaged and awaiting analyst pickup | Unassigned Queue |
+| **Assigned** | Analyst or assignment group assigned; initial response pending | Assigned Analyst |
+| **In Progress** | Active diagnostic investigation or technical remediation underway | Assigned Analyst |
+| **Waiting for Customer** | Work paused awaiting caller feedback, testing, or supplemental information | Assigned Analyst (monitoring) |
+| **Waiting for Vendor** | Work paused awaiting external hardware/software vendor replacement or dispatch | Assigned Analyst (monitoring) |
+| **Resolved** | Remediation applied; resolution notes and root cause documented | Assigned Analyst / User |
+| **Closed** | Final operational state; user confirmation received or retention finalized | System / Service Desk Lead |
 
-| Sub-status | Meaning | SLA Clock |
-|------------|---------|-----------|
-| **Pending — User** | Waiting for user to provide information, test, or confirm | Paused |
-| **Pending — Vendor** | Waiting for third-party vendor action | Paused |
-| **Pending — Change** | Resolution requires a change that's awaiting approval/implementation | Paused |
-| **Pending — Hardware** | Waiting for replacement hardware to arrive | Running (track in procurement) |
-
-## State Diagram
+## State Transition Diagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> New: Ticket Created
-    New --> Assigned: Analyst picks up\nor auto-assignment
-    Assigned --> InProgress: Analyst starts\ninvestigation
-    InProgress --> Pending: Waiting for\nexternal input
-    Pending --> InProgress: Input received,\nwork resumes
-    InProgress --> Resolved: Fix applied
-    InProgress --> Assigned: Reassigned to\ndifferent analyst/team
-    Assigned --> Assigned: Reassigned to\ndifferent analyst/team
-    Resolved --> Closed: User confirms\nor auto-close (5 days)
-    Resolved --> InProgress: User reports\nissue persists
-    Closed --> [*]
+    [*] --> New: Ticket Created via Portal/API
+    New --> Assigned: Analyst Assigned
+    New --> InProgress: Analyst Begins Work Directly
+    Assigned --> InProgress: Investigation Commences
+    Assigned --> WaitingForCustomer: Awaiting User Information
+    Assigned --> WaitingForVendor: Awaiting Third-Party Vendor
+    InProgress --> WaitingForCustomer: Information Requested from User
+    InProgress --> WaitingForVendor: Ticket Escalated to Vendor
+    InProgress --> Resolved: Solution Applied & Documented
+    WaitingForCustomer --> InProgress: User Provides Feedback
+    WaitingForCustomer --> Resolved: User Confirms Fix
+    WaitingForVendor --> InProgress: Vendor Resolves / Dispatches
+    WaitingForVendor --> Resolved: Vendor Resolution Verified
+    Resolved --> Closed: Resolution Confirmed
+    Resolved --> InProgress: Reopened (Issue Persists)
+    Closed --> InProgress: Reopened (Regression)
 
     note right of New
-        SLA clock starts here
+        Continuous SLA elapsed clock begins
     end note
 
-    note right of Pending
-        SLA clock paused
-        (except Pending-Hardware)
+    note right of InProgress
+        Continuous 24x7 SLA elapsed clock running
+    end note
+
+    note right of WaitingForCustomer
+        Waiting states: SLA clock runs continuously (no pause)
     end note
 
     note right of Resolved
-        3-day user confirmation
-        window, then 2-day
-        auto-close countdown
+        resolved_at timestamp captured
+        Elapsed hours locked
     end note
 ```
 
-## Transition Rules
+## Backend Transition Enforcement (`ALLOWED_TRANSITIONS`)
 
-### New → Assigned
+The state machine is implemented in `itsm/portal/app.py` via the following rule dictionary:
 
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | Analyst picks the ticket from queue, or auto-assignment rule fires |
-| **Required action** | Analyst accepts ownership |
-| **SLA impact** | Response SLA clock is ticking — must contact user within response time |
-| **Who can do it** | Any L1 analyst, Service Desk Lead, or auto-assignment rule |
+```python
+ALLOWED_TRANSITIONS = {
+    "New": ["Assigned", "In Progress"],
+    "Assigned": ["In Progress", "Waiting for Customer", "Waiting for Vendor"],
+    "In Progress": ["Waiting for Customer", "Waiting for Vendor", "Resolved"],
+    "Waiting for Customer": ["In Progress", "Resolved"],
+    "Waiting for Vendor": ["In Progress", "Resolved"],
+    "Resolved": ["Closed", "In Progress"],
+    "Closed": ["In Progress"]  # Reopening resets resolution timestamp
+}
+```
 
-**Auto-assignment rules at Nexora:**
-- P1 → Assign to on-call analyst immediately + notify Service Desk Lead
-- P2 → Assign to first available analyst in the matching L1 group
-- P3/P4 → Round-robin within the matching L1 group
+### Transition Rules & Operational Triggers
 
-### Assigned → In Progress
+#### 1. New → Assigned or In Progress
+- **Trigger:** An L1 analyst claims the ticket from the unassigned queue, or the Service Desk Lead assigns it to a technician.
+- **Required Action:** Technician validates priority and contacts the caller if urgent clarification is required.
+- **SLA Clock:** Runs continuously from `created_at`.
 
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | Analyst starts active work on the ticket |
-| **Required action** | Contact the user (satisfies response SLA) and begin diagnosis |
-| **SLA impact** | Response SLA satisfied when user is contacted |
-| **Mandatory fields** | Initial notes documenting the contact and initial assessment |
+#### 2. Assigned → In Progress, Waiting for Customer, or Waiting for Vendor
+- **Trigger:** Active investigation begins, or initial triage reveals missing user details or external dependency.
+- **Required Action:** Analyst logs initial diagnostic note.
 
-The transition from Assigned to In Progress should happen quickly. Don't let tickets sit in Assigned — if you're not going to work on it now, don't pick it up.
+#### 3. In Progress → Waiting for Customer or Waiting for Vendor
+- **Trigger:** The analyst requires additional log files, physical device access, or vendor dispatch (e.g., ISP circuit outage, Dell hardware replacement).
+- **Required Action:** Analyst records a customer comment explaining the needed information, or logs a work note tracking the vendor case number.
+- **SLA Policy:** In this operational environment, the SLA clock measures total continuous elapsed hours; waiting states do not halt or pause the 24x7 resolution clock.
 
-### In Progress → Pending
+#### 4. Waiting for Customer / Vendor → In Progress or Resolved
+- **Trigger:** Customer replies via the portal comment interface, or vendor completes field replacement.
+- **Required Action:** Analyst resumes diagnostic work (`In Progress`) or moves directly to `Resolved` if the fix is verified.
 
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | Analyst needs something they can't provide themselves |
-| **Required action** | Document what you're waiting for and from whom |
-| **SLA impact** | Clock pauses (except Pending-Hardware) |
-| **Mandatory fields** | Pending reason, pending sub-status, expected response timeframe |
+#### 5. In Progress / Waiting → Resolved
+- **Trigger:** Root cause identified, technical fix applied, and service confirmed restored.
+- **Mandatory Requirements:** Technician must supply verified `resolution_notes`. Empty or placeholder notes are rejected by the API.
+- **SLA Impact:** The backend captures `resolved_at = datetime.now(timezone.utc)` and locks total elapsed hours against the SLA target.
 
-**Rules for Pending:**
-- Set a follow-up date. If no response by that date, follow up proactively.
-- Pending-User: If no response after 3 business days, try again. After 5 business days with no response, resolve with note "Unable to verify — user unresponsive" and let the auto-close process handle it.
-- Pending-Vendor: Check vendor case status daily for P1/P2, every 2 days for P3/P4.
+#### 6. Resolved → Closed
+- **Trigger:** Customer confirms issue is resolved, or ticket reaches closure review.
+- **Outcome:** Ticket reaches terminal lifecycle state.
 
-### Pending → In Progress
+#### 7. Reopening (Resolved or Closed → In Progress)
+- **Allowed Reopen Target:** Reopened tickets transition exclusively to `In Progress`.
+- **Clock Mechanics:**
+  - The backend resets `resolved_at = NULL`.
+  - Elapsed hours resume accumulating from the original creation timestamp (`created_at`).
+  - If total elapsed hours exceed the target threshold, the ticket status changes to `Breached` (`sla_breached = 1`).
+  - Reopening never resets elapsed time to zero.
 
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | The information/action you were waiting for arrives |
-| **Required action** | Resume work, document what was received |
-| **SLA impact** | Clock resumes |
-| **Mandatory fields** | Notes on what was received and next steps |
+## SLA Clock Mechanics & Continuous Time Tracking
 
-### In Progress → Resolved
+Resolution targets are strictly enforced based on priority:
+- **P1 (Critical):** 4.0 continuous elapsed hours
+- **P2 (High):** 8.0 continuous elapsed hours
+- **P3 (Medium):** 72.0 continuous elapsed hours
+- **P4 (Low):** 120.0 continuous elapsed hours
 
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | The fix has been applied and the service is restored |
-| **Required action** | Document the resolution clearly, notify the user |
-| **SLA impact** | Resolution SLA evaluated at this point |
-| **Mandatory fields** | Resolution notes, root cause (if known), resolution category |
+$$\text{Elapsed Hours} = \frac{\text{Timestamp}_{\text{resolved}} - \text{Timestamp}_{\text{created}}}{3600}$$
 
-**Resolution notes must include:**
-1. What the problem was (root cause or immediate cause)
-2. What you did to fix it (specific steps)
-3. How you verified it's working
-4. Any follow-up actions needed (e.g., problem record to raise, knowledge article to write)
+$$\text{Remaining Hours} = \max\left(0.0, \text{Target Hours} - \text{Elapsed Hours}\right)$$
 
-**Bad resolution note:** "Fixed the issue."
-**Good resolution note:** "Outlook crash caused by corrupted OST file. Renamed `outlook.ost` in `%localappdata%\Microsoft\Outlook\`, restarted Outlook to trigger resync. Verified user can open attachments. ~2GB mailbox took 15min to resync. No data loss — OST is a local cache of server data."
+If $\text{Elapsed Hours} > \text{Target Hours}$, the ticket is permanently recorded as breached.
 
-### Resolved → Closed
+## Operational Queue Mapping
 
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | User confirms resolution is satisfactory, OR auto-close timer expires |
-| **Required action** | Final review of ticket quality |
-| **Closure checklist** | Category correct? Priority correct? Resolution notes complete? Time logged? |
+The service desk web console (`/agent`) provides filtered queue visibility corresponding directly to ticket states and SLA risk:
 
-**Auto-close process:**
-1. Ticket moves to Resolved → System sends user a confirmation email
-2. User has 3 business days to respond "yes it's fixed" or "no, still broken"
-3. If user confirms → Close immediately
-4. If no response after 3 business days → System sends a reminder
-5. If no response after 5 business days total → Auto-close with note "Auto-closed — no user response after 5 business days"
-
-### Resolved → In Progress (Reopen)
-
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | User reports the issue is not actually fixed |
-| **Required action** | Investigate why the fix didn't hold, document findings |
-| **SLA impact** | Resolution SLA restarts from original log time (the ticket is now breaching or at risk) |
-| **Maximum reopens** | After 3 reopens, escalate to Service Desk Lead for review |
-
-Reopens are a quality signal. If your tickets reopen frequently, review your verification process.
-
-### In Progress → Assigned (Reassignment)
-
-| Condition | Detail |
-|-----------|--------|
-| **Trigger** | Ticket needs to be handled by a different analyst or team (functional escalation) |
-| **Required action** | Document everything you've tried, update the ticket, notify the receiving team |
-| **SLA impact** | Clock continues running — reassignment doesn't reset or pause the SLA |
-
-**Critical rule:** The SLA clock never resets on reassignment. An L2 team inherits whatever time has already elapsed. This is by design — it prevents "ticket ping-pong" where teams bounce tickets to reset the clock.
-
-## Ticket Quality Checklist (Before Closing)
-
-Every ticket should pass this quality check:
-
-- [ ] **Category and subcategory** are accurate (not just the initial assignment)
-- [ ] **Priority** was correctly assessed using Impact × Urgency matrix
-- [ ] **Description** captures the user's actual report
-- [ ] **Resolution notes** are specific and reproducible
-- [ ] **Root cause** identified and documented (or noted as unknown)
-- [ ] **Time entries** logged accurately
-- [ ] **User confirmation** received (or auto-close process followed)
-- [ ] **Related records** linked (problem record, change, knowledge article)
-- [ ] **Asset** field populated if applicable
-
-## Metrics Derived from Lifecycle
-
-| Metric | How It's Calculated | What It Tells You |
-|--------|--------------------|--------------------|
-| Average time in New | Mean time from creation to Assigned | Queue backlog / staffing adequacy |
-| L1 Resolution Rate (Non-Escalated) | Tickets that went New → Assigned → In Progress → Resolved without reassignment to L2/L3 | L1 effectiveness |
-| Reopen rate | % of tickets that went Resolved → In Progress | Fix quality |
-| Pending time ratio | Time in Pending / total ticket age | Are we waiting too much on others? |
-| Mean Time to Resolve | Time from New to Resolved (minus Pending time) | Actual work efficiency |
-| Ticket aging | Tickets open longer than 2× their SLA | Stuck tickets needing attention |
-
-## Anti-Patterns
-
-| Pattern | Problem | Fix |
-|---------|---------|-----|
-| **Ticket hoarding** | Analyst assigns 10 tickets to themselves, works on 1 | Pick up 2-3 at a time max, leave the rest in queue |
-| **Premature close** | Closing without user confirmation | Always wait for confirmation or auto-close timer |
-| **Status camping** | Ticket sits in "In Progress" for days with no updates | Add notes daily. If blocked, move to Pending with a reason. |
-| **Ping-pong** | Teams reassigning back and forth | Service Desk Lead arbitrates. After 2 bounces, both teams join a call. |
-| **Ghost pending** | Pending without a follow-up date or reminder | Always set a follow-up date. Review Pending tickets daily. |
-| **Priority inflation** | Everything is P1/P2 | Use the matrix. Service Desk Lead reviews priority overrides weekly. |
+| Queue Filter | Target Query Condition | Operational Purpose |
+|--------------|------------------------|---------------------|
+| `all` | All tickets | Overall backlog management |
+| `unassigned` | `status = 'New' AND assigned_to IS NULL` | Triage and dispatch queue |
+| `assigned_me` | `assigned_to = :username` | Personal analyst workload |
+| `p1` | `priority = 'P1' AND status NOT IN ('Resolved', 'Closed')` | Critical enterprise incidents |
+| `p2` | `priority = 'P2' AND status NOT IN ('Resolved', 'Closed')` | High priority incidents |
+| `wait_customer` | `status = 'Waiting for Customer'` | User follow-up tracking |
+| `wait_vendor` | `status = 'Waiting for Vendor'` | External supplier management |
+| `sla_risk` | `sla_breached = 0 AND remaining_hours <= 2.0` | Active escalation warning queue |
+| `sla_breached` | `sla_breached = 1 AND status NOT IN ('Resolved', 'Closed')` | Post-breach management |
+| `resolved` | `status IN ('Resolved', 'Closed')` | Verification and reporting |

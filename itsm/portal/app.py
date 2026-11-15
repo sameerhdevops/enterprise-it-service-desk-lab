@@ -229,9 +229,10 @@ def get_or_create_bootstrap_password(creds_file: str = LOCAL_CREDENTIALS_FILE) -
     3. Securely generated random token saved to .local_credentials.json and verified before use.
     Fails closed if permissions are insecure, file is corrupt, or persistence fails.
     """
-    env_pass = os.environ.get("NEXORA_PORTAL_ADMIN_PASS")
-    if env_pass:
-        return env_pass.strip()
+    if creds_file == LOCAL_CREDENTIALS_FILE:
+        env_pass = os.environ.get("NEXORA_PORTAL_ADMIN_PASS")
+        if env_pass:
+            return env_pass.strip()
 
     if os.path.exists(creds_file):
         # Ensure existing credential file is protected with restrictive OS permissions
@@ -434,15 +435,16 @@ def init_db(db_path=DEFAULT_DB_FILE, creds_file=LOCAL_CREDENTIALS_FILE):
         """, ("alex.chen", "Alex Chen (L1 Lead)", "agent", pwd_hash, salt, now_str))
         conn.commit()
     else:
-        # Check for legacy password hash on existing alex.chen user and rotate safely
+        # Check for legacy password hash or credential mismatch on existing alex.chen user and reconcile safely
         c.execute("SELECT id, username, password_hash, salt FROM users WHERE username = 'alex.chen'")
         alex_row = c.fetchone()
         if alex_row:
             user_id, username, stored_hash, stored_salt = alex_row
-            # Check if legacy default password is in use
-            if verify_password("NexoraSupport#2026", stored_salt, stored_hash):
+            # Reconcile database password hash with local trusted bootstrap credentials
+            bootstrap_pass = get_or_create_bootstrap_password(creds_file)
+            if not verify_password(bootstrap_pass, stored_salt, stored_hash):
                 conn.close()
-                migrate_or_rotate_user_credentials(db_path, "alex.chen", creds_file=creds_file)
+                migrate_or_rotate_user_credentials(db_path, "alex.chen", new_password=bootstrap_pass, creds_file=creds_file)
                 conn = sqlite3.connect(db_path)
                 c = conn.cursor()
 

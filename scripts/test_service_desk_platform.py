@@ -646,187 +646,217 @@ def run_tests():
 
         # Test 17: Existing Database Credential Migration & Ticket Preservation
         log("\n[TEST 17] Existing Database Credential Migration & Ticket Preservation:")
-        migration_temp_dir = tempfile.mkdtemp()
-        mig_db = os.path.join(migration_temp_dir, "mig_test.db")
-        mig_creds = os.path.join(migration_temp_dir, "mig_creds.json")
-
-        conn = sqlite3.connect(mig_db)
-        c = conn.cursor()
-        c.execute("""
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            full_name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-        """)
-        c.execute("""
-        CREATE TABLE tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            title TEXT NOT NULL,
-            request_type TEXT NOT NULL,
-            caller_name TEXT NOT NULL,
-            caller_email TEXT NOT NULL,
-            department TEXT NOT NULL,
-            impact TEXT NOT NULL,
-            urgency TEXT NOT NULL,
-            priority TEXT NOT NULL,
-            status TEXT NOT NULL,
-            assigned_to TEXT,
-            assignment_group TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            resolved_at TEXT,
-            due_at TEXT NOT NULL,
-            sla_target_hours REAL NOT NULL,
-            sla_breached INTEGER DEFAULT 0,
-            description TEXT,
-            resolution_notes TEXT,
-            customer_access_token TEXT
-        )
-        """)
-        c.execute("""
-        CREATE TABLE ticket_activity (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticket_key TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            author TEXT NOT NULL,
-            activity_type TEXT NOT NULL,
-            message TEXT NOT NULL
-        )
-        """)
-        # Insert legacy user with real previous default password 'NexoraSupport#2026'
-        legacy_hash, legacy_salt = service_desk_app.hash_password("NexoraSupport#2026")
-        c.execute("INSERT INTO users VALUES (1, 'alex.chen', 'Alex Chen (L1 Lead)', 'agent', ?, ?, '2024-11-01 10:00:00')", (legacy_hash, legacy_salt))
-
-        # Insert 5 test tickets with complete fields
-        for i in range(1, 6):
-            tok = secrets.token_urlsafe(24)
-            c.execute("""
-            INSERT INTO tickets (
-                key, title, request_type, caller_name, caller_email, department,
-                impact, urgency, priority, status, assigned_to, assignment_group,
-                created_at, updated_at, resolved_at, due_at, sla_target_hours, sla_breached,
-                description, resolution_notes, customer_access_token
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                f"NEX-MIG-{i}", f"Legacy Seed Ticket {i}", "Software", "User", "user@nexora.test", "IT",
-                "Medium", "Medium", "P3", "New", "Alex Chen", "L1 Service Desk",
-                "2024-11-01 10:00:00", "2024-11-01 10:00:00", None, "2024-11-04 10:00:00", 72.0, 0,
-                f"Description {i}", "", tok
-            ))
-            c.execute("""
-            INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
-            VALUES (?, '2024-11-01 10:00:00', 'User', 'CUSTOMER_COMMENT', ?)
-            """, (f"NEX-MIG-{i}", f"Initial creation {i}"))
-
-        conn.commit()
-
-        # Capture pre-migration state
-        c.execute("SELECT * FROM tickets ORDER BY id ASC")
-        pre_tickets = c.fetchall()
-        c.execute("SELECT * FROM ticket_activity ORDER BY id ASC")
-        pre_activities = c.fetchall()
-        c.execute("SELECT COUNT(*) FROM users")
-        pre_user_count = c.fetchone()[0]
-        conn.close()
-
-        # Execute the actual init_db() automatic migration path
-        service_desk_app.init_db(db_path=mig_db, creds_file=mig_creds)
-
-        # 17a. Verify old password fails and new password succeeds
-        conn = sqlite3.connect(mig_db)
-        c = conn.cursor()
-        c.execute("SELECT password_hash, salt FROM users WHERE username = 'alex.chen'")
-        h2, s2 = c.fetchone()
-        assert not service_desk_app.verify_password("NexoraSupport#2026", s2, h2), "Old default password 'NexoraSupport#2026' still verified after migration!"
-
-        with open(mig_creds, "r", encoding="utf-8") as f:
-            migrated_data = json.load(f)
-        new_pass = migrated_data["bootstrap_password"]
-        assert service_desk_app.verify_password(new_pass, s2, h2), "New rotated password failed verification!"
-        log("  - Automatic init_db() migration: Old password invalidated; new rotated credentials verified. [PASS]")
-
-        # 17b. Verify tickets, activity logs, and counts completely preserved
-        c.execute("SELECT * FROM tickets ORDER BY id ASC")
-        post_tickets = c.fetchall()
-        assert post_tickets == pre_tickets, "Ticket records were altered or corrupted during credential migration!"
-
-        c.execute("SELECT * FROM ticket_activity ORDER BY id ASC")
-        post_activities = c.fetchall()
-        assert post_activities == pre_activities, "Ticket activity records were altered during credential migration!"
-
-        c.execute("SELECT COUNT(*) FROM users")
-        post_user_count = c.fetchone()[0]
-        assert post_user_count == pre_user_count == 1, f"User count mismatch: expected 1 user, found {post_user_count} (duplicate created)!"
-        assert len(post_tickets) == 5, f"Ticket count mismatch: expected 5 tickets, found {len(post_tickets)}!"
-        conn.close()
-        log("  - Database Integrity: All 5 ticket records, all activity records, and user count strictly preserved without duplicates. [PASS]")
-
-        # 17c. Strict Windows ACL / POSIX permission verification on generated credentials file
-        assert os.path.exists(mig_creds), "Migrated credentials file not created"
-        service_desk_app.verify_local_file_permissions(mig_creds)
-        log(f"  - Strict Permissions Verification: Verified fail-closed permissions (SIDs / mode 0600) on <TEMP_DIR>\\{os.path.basename(mig_creds)}. [PASS]")
-
-        # 17d. Test ACL negative test cases (reject unexpected principals and inherited permissions)
-        if os.name == "nt":
-            import subprocess
-            # Negative Case 1: Unauthorized principal (Everyone:R) MUST fail verification
-            unauth_test_file = os.path.join(migration_temp_dir, "unauth_test.json")
-            with open(unauth_test_file, "w") as f: f.write("{}")
-            service_desk_app.protect_local_file(unauth_test_file)
-            subprocess.run(["icacls.exe", unauth_test_file, "/grant:r", "Everyone:(R)"], capture_output=True)
-            rejected_unauth = False
-            try:
-                service_desk_app.verify_local_file_permissions(unauth_test_file)
-            except PermissionError:
-                rejected_unauth = True
-            assert rejected_unauth, "verify_local_file_permissions failed to reject unauthorized Everyone principal!"
-            log("  - Strict ACL Defense: Successfully rejected unexpected unauthorized principal (Everyone). [PASS]")
-
-            # Negative Case 2: Inherited permissions MUST fail verification
-            inherit_test_file = os.path.join(migration_temp_dir, "inherit_test.json")
-            with open(inherit_test_file, "w") as f: f.write("{}")
-            subprocess.run(["icacls.exe", inherit_test_file, "/inheritance:e"], capture_output=True)
-            rejected_inherit = False
-            try:
-                service_desk_app.verify_local_file_permissions(inherit_test_file)
-            except PermissionError:
-                rejected_inherit = True
-            assert rejected_inherit, "verify_local_file_permissions failed to reject inherited permissions!"
-            log("  - Strict ACL Defense: Successfully rejected enabled inheritance. [PASS]")
-
-        # 17e. Test migration failure handling & transactional rollback
-        fail_db = os.path.join(migration_temp_dir, "fail_test.db")
-        conn_fail = sqlite3.connect(fail_db)
-        c_fail = conn_fail.cursor()
-        c_fail.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, full_name TEXT, role TEXT, password_hash TEXT, salt TEXT, created_at TEXT)")
-        c_fail.execute("CREATE TABLE tickets (id INTEGER PRIMARY KEY, key TEXT, customer_access_token TEXT)")
-        c_fail.execute("CREATE TABLE ticket_activity (id INTEGER PRIMARY KEY)")
-        c_fail.execute("INSERT INTO users VALUES (1, 'alex.chen', 'Alex Chen', 'agent', ?, ?, '2024-11-01')", (legacy_hash, legacy_salt))
-        conn_fail.commit()
-        conn_fail.close()
-
-        unwriteable_creds = "Z:\\nonexistent_dir_12345\\impossible_creds.json"
-        failed_safely = False
+        saved_env_pass = os.environ.pop("NEXORA_PORTAL_ADMIN_PASS", None)
         try:
-            service_desk_app.init_db(db_path=fail_db, creds_file=unwriteable_creds)
-        except Exception:
-            failed_safely = True
-        assert failed_safely, "init_db() must raise an exception when credentials cannot be safely persisted!"
+            migration_temp_dir = tempfile.mkdtemp()
+            mig_db = os.path.join(migration_temp_dir, "mig_test.db")
+            mig_creds = os.path.join(migration_temp_dir, "mig_creds.json")
 
-        # Verify DB was NOT updated when file writing failed
-        conn_chk = sqlite3.connect(fail_db)
-        c_chk = conn_chk.cursor()
-        c_chk.execute("SELECT password_hash, salt FROM users WHERE username = 'alex.chen'")
-        h_chk, s_chk = c_chk.fetchone()
-        assert service_desk_app.verify_password("NexoraSupport#2026", s_chk, h_chk), "Database password was rotated despite persistence failure!"
-        conn_chk.close()
-        log("  - Migration Failure Handling: Verified database password is NOT rotated when credentials cannot be safely persisted. [PASS]")
+            conn = sqlite3.connect(mig_db)
+            c = conn.cursor()
+            c.execute("""
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """)
+            c.execute("""
+            CREATE TABLE tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                title TEXT NOT NULL,
+                request_type TEXT NOT NULL,
+                caller_name TEXT NOT NULL,
+                caller_email TEXT NOT NULL,
+                department TEXT NOT NULL,
+                impact TEXT NOT NULL,
+                urgency TEXT NOT NULL,
+                priority TEXT NOT NULL,
+                status TEXT NOT NULL,
+                assigned_to TEXT,
+                assignment_group TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                resolved_at TEXT,
+                due_at TEXT NOT NULL,
+                sla_target_hours REAL NOT NULL,
+                sla_breached INTEGER DEFAULT 0,
+                description TEXT,
+                resolution_notes TEXT,
+                customer_access_token TEXT
+            )
+            """)
+            c.execute("""
+            CREATE TABLE ticket_activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_key TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                author TEXT NOT NULL,
+                activity_type TEXT NOT NULL,
+                message TEXT NOT NULL
+            )
+            """)
+            # Insert legacy user with real previous default password 'NexoraSupport#2026'
+            legacy_hash, legacy_salt = service_desk_app.hash_password("NexoraSupport#2026")
+            c.execute("INSERT INTO users VALUES (1, 'alex.chen', 'Alex Chen (L1 Lead)', 'agent', ?, ?, '2024-11-01 10:00:00')", (legacy_hash, legacy_salt))
+
+            # Insert 5 test tickets with complete fields
+            for i in range(1, 6):
+                tok = secrets.token_urlsafe(24)
+                c.execute("""
+                INSERT INTO tickets (
+                    key, title, request_type, caller_name, caller_email, department,
+                    impact, urgency, priority, status, assigned_to, assignment_group,
+                    created_at, updated_at, resolved_at, due_at, sla_target_hours, sla_breached,
+                    description, resolution_notes, customer_access_token
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    f"NEX-MIG-{i}", f"Legacy Seed Ticket {i}", "Software", "User", "user@nexora.test", "IT",
+                    "Medium", "Medium", "P3", "New", "Alex Chen", "L1 Service Desk",
+                    "2024-11-01 10:00:00", "2024-11-01 10:00:00", None, "2024-11-04 10:00:00", 72.0, 0,
+                    f"Description {i}", "", tok
+                ))
+                c.execute("""
+                INSERT INTO ticket_activity (ticket_key, timestamp, author, activity_type, message)
+                VALUES (?, '2024-11-01 10:00:00', 'User', 'CUSTOMER_COMMENT', ?)
+                """, (f"NEX-MIG-{i}", f"Initial creation {i}"))
+
+            conn.commit()
+
+            # Capture pre-migration state
+            c.execute("SELECT * FROM tickets ORDER BY id ASC")
+            pre_tickets = c.fetchall()
+            c.execute("SELECT * FROM ticket_activity ORDER BY id ASC")
+            pre_activities = c.fetchall()
+            c.execute("SELECT COUNT(*) FROM users")
+            pre_user_count = c.fetchone()[0]
+            conn.close()
+
+            # Execute the actual init_db() automatic migration path
+            service_desk_app.init_db(db_path=mig_db, creds_file=mig_creds)
+
+            # 17a. Verify old password fails and new password succeeds
+            conn = sqlite3.connect(mig_db)
+            c = conn.cursor()
+            c.execute("SELECT password_hash, salt FROM users WHERE username = 'alex.chen'")
+            h2, s2 = c.fetchone()
+            assert not service_desk_app.verify_password("NexoraSupport#2026", s2, h2), "Old default password 'NexoraSupport#2026' still verified after migration!"
+
+            with open(mig_creds, "r", encoding="utf-8") as f:
+                migrated_data = json.load(f)
+            new_pass = migrated_data["bootstrap_password"]
+            assert service_desk_app.verify_password(new_pass, s2, h2), "New rotated password failed verification!"
+            log("  - Automatic init_db() migration: Old password invalidated; new rotated credentials verified. [PASS]")
+
+            # 17b. Verify tickets, activity logs, and counts completely preserved
+            c.execute("SELECT * FROM tickets ORDER BY id ASC")
+            post_tickets = c.fetchall()
+            assert post_tickets == pre_tickets, "Ticket records were altered or corrupted during credential migration!"
+
+            c.execute("SELECT * FROM ticket_activity ORDER BY id ASC")
+            post_activities = c.fetchall()
+            assert post_activities == pre_activities, "Ticket activity records were altered during credential migration!"
+
+            c.execute("SELECT COUNT(*) FROM users")
+            post_user_count = c.fetchone()[0]
+            assert post_user_count == pre_user_count == 1, f"User count mismatch: expected 1 user, found {post_user_count} (duplicate created)!"
+            assert len(post_tickets) == 5, f"Ticket count mismatch: expected 5 tickets, found {len(post_tickets)}!"
+            conn.close()
+            log("  - Database Integrity: All 5 ticket records, all activity records, and user count strictly preserved without duplicates. [PASS]")
+
+            # 17b_2. Credential Mismatch Reconciler Test
+            reconcile_creds = os.path.join(migration_temp_dir, "reconcile_creds.json")
+            second_pass = secrets.token_urlsafe(20)
+            with open(reconcile_creds, "w", encoding="utf-8") as f:
+                json.dump({
+                    "username": "alex.chen",
+                    "bootstrap_password": second_pass,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "note": "Reconciled test credentials"
+                }, f, indent=2)
+            service_desk_app.protect_local_file(reconcile_creds)
+
+            service_desk_app.init_db(db_path=mig_db, creds_file=reconcile_creds)
+
+            conn = sqlite3.connect(mig_db)
+            c = conn.cursor()
+            c.execute("SELECT password_hash, salt FROM users WHERE username = 'alex.chen'")
+            h3, s3 = c.fetchone()
+            assert not service_desk_app.verify_password(new_pass, s3, h3), "Previous password still verified after second reconciliation!"
+            assert service_desk_app.verify_password(second_pass, s3, h3), "Reconciled second password failed verification!"
+            c.execute("SELECT COUNT(*) FROM tickets")
+            assert c.fetchone()[0] == 5, "Tickets lost during second credential reconciliation!"
+            conn.close()
+            log("  - Dynamic Credential Reconciler: Reconciled DB hash with external credentials file without ticket loss. [PASS]")
+
+            # 17c. Strict Windows ACL / POSIX permission verification on generated credentials file
+            assert os.path.exists(mig_creds), "Migrated credentials file not created"
+            service_desk_app.verify_local_file_permissions(mig_creds)
+            log(f"  - Strict Permissions Verification: Verified fail-closed permissions (SIDs / mode 0600) on <TEMP_DIR>\\{os.path.basename(mig_creds)}. [PASS]")
+
+            # 17d. Test ACL negative test cases (reject unexpected principals and inherited permissions)
+            if os.name == "nt":
+                import subprocess
+                # Negative Case 1: Unauthorized principal (Everyone:R) MUST fail verification
+                unauth_test_file = os.path.join(migration_temp_dir, "unauth_test.json")
+                with open(unauth_test_file, "w") as f: f.write("{}")
+                service_desk_app.protect_local_file(unauth_test_file)
+                subprocess.run(["icacls.exe", unauth_test_file, "/grant:r", "Everyone:(R)"], capture_output=True)
+                rejected_unauth = False
+                try:
+                    service_desk_app.verify_local_file_permissions(unauth_test_file)
+                except PermissionError:
+                    rejected_unauth = True
+                assert rejected_unauth, "verify_local_file_permissions failed to reject unauthorized Everyone principal!"
+                log("  - Strict ACL Defense: Successfully rejected unexpected unauthorized principal (Everyone). [PASS]")
+
+                # Negative Case 2: Inherited permissions MUST fail verification
+                inherit_test_file = os.path.join(migration_temp_dir, "inherit_test.json")
+                with open(inherit_test_file, "w") as f: f.write("{}")
+                subprocess.run(["icacls.exe", inherit_test_file, "/inheritance:e"], capture_output=True)
+                rejected_inherit = False
+                try:
+                    service_desk_app.verify_local_file_permissions(inherit_test_file)
+                except PermissionError:
+                    rejected_inherit = True
+                assert rejected_inherit, "verify_local_file_permissions failed to reject inherited permissions!"
+                log("  - Strict ACL Defense: Successfully rejected enabled inheritance. [PASS]")
+
+            # 17e. Test migration failure handling & transactional rollback
+            fail_db = os.path.join(migration_temp_dir, "fail_test.db")
+            conn_fail = sqlite3.connect(fail_db)
+            c_fail = conn_fail.cursor()
+            c_fail.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, full_name TEXT, role TEXT, password_hash TEXT, salt TEXT, created_at TEXT)")
+            c_fail.execute("CREATE TABLE tickets (id INTEGER PRIMARY KEY, key TEXT, customer_access_token TEXT)")
+            c_fail.execute("CREATE TABLE ticket_activity (id INTEGER PRIMARY KEY)")
+            c_fail.execute("INSERT INTO users VALUES (1, 'alex.chen', 'Alex Chen', 'agent', ?, ?, '2024-11-01')", (legacy_hash, legacy_salt))
+            conn_fail.commit()
+            conn_fail.close()
+
+            unwriteable_creds = "Z:\\nonexistent_dir_12345\\impossible_creds.json"
+            failed_safely = False
+            try:
+                service_desk_app.init_db(db_path=fail_db, creds_file=unwriteable_creds)
+            except Exception:
+                failed_safely = True
+            assert failed_safely, "init_db() must raise an exception when credentials cannot be safely persisted!"
+
+            # Verify DB was NOT updated when file writing failed
+            conn_chk = sqlite3.connect(fail_db)
+            c_chk = conn_chk.cursor()
+            c_chk.execute("SELECT password_hash, salt FROM users WHERE username = 'alex.chen'")
+            h_chk, s_chk = c_chk.fetchone()
+            assert service_desk_app.verify_password("NexoraSupport#2026", s_chk, h_chk), "Database password was rotated despite persistence failure!"
+            conn_chk.close()
+            log("  - Migration Failure Handling: Verified database password is NOT rotated when credentials cannot be safely persisted. [PASS]")
+        finally:
+            if saved_env_pass:
+                os.environ["NEXORA_PORTAL_ADMIN_PASS"] = saved_env_pass
 
         # 17f. Static code security audit on Samba AD provisioning and password management
         samba_script_path = os.path.join(PROJECT_ROOT, "scripts", "deploy_samba_ad.py")

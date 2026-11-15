@@ -25,6 +25,7 @@ import os
 import json
 import secrets
 import string
+import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -192,9 +193,11 @@ def generate_complex_password(length=16) -> str:
     core = "".join(secrets.choice(alphabet) for _ in range(length))
     return f"{core}Nx1!"
 
-def load_or_create_credentials() -> dict:
+def load_or_create_credentials(force_rotate: bool = False) -> dict:
     """
     Loads existing unique account credentials or generates new distinct credentials.
+    If force_rotate is True, regenerates distinct cryptographically random passwords for
+    all accounts (Administrator and 12 domain users).
     Fails closed:
     - Validates existing credentials JSON structure and all required accounts.
     - Verifies file permissions before accepting existing file.
@@ -202,27 +205,34 @@ def load_or_create_credentials() -> dict:
     - Atomically replaces file and reverifies.
     """
     creds = {}
-    if os.path.exists(CREDENTIALS_FILE):
-        # Ensure existing credentials file is protected with restrictive OS permissions
-        protect_local_file(CREDENTIALS_FILE)
-        try:
-            with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
-                creds = json.load(f)
-        except Exception as e:
-            raise ValueError(f"Credentials file {CREDENTIALS_FILE} is corrupt: {e}")
-
-        if not isinstance(creds, dict):
-            raise ValueError(f"Credentials file {CREDENTIALS_FILE} must contain a JSON object")
-
     changed = False
-    if "Administrator" not in creds:
-        creds["Administrator"] = generate_complex_password()
-        changed = True
 
-    for uname, _, _, _, _, _ in USER_DEFS:
-        if uname not in creds:
+    if force_rotate:
+        creds["Administrator"] = generate_complex_password()
+        for uname, _, _, _, _, _ in USER_DEFS:
             creds[uname] = generate_complex_password()
+        changed = True
+    else:
+        if os.path.exists(CREDENTIALS_FILE):
+            # Ensure existing credentials file is protected with restrictive OS permissions
+            protect_local_file(CREDENTIALS_FILE)
+            try:
+                with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
+                    creds = json.load(f)
+            except Exception as e:
+                raise ValueError(f"Credentials file {CREDENTIALS_FILE} is corrupt: {e}")
+
+            if not isinstance(creds, dict):
+                raise ValueError(f"Credentials file {CREDENTIALS_FILE} must contain a JSON object")
+
+        if "Administrator" not in creds:
+            creds["Administrator"] = generate_complex_password()
             changed = True
+
+        for uname, _, _, _, _, _ in USER_DEFS:
+            if uname not in creds:
+                creds[uname] = generate_complex_password()
+                changed = True
 
     if changed or not os.path.exists(CREDENTIALS_FILE):
         tmp_file = os.path.join(EVIDENCE_DIR, f".tmp_ad_creds_{secrets.token_hex(6)}.json")
@@ -261,15 +271,24 @@ def is_samba_running() -> bool:
     return bool(res.stdout.strip())
 
 def main():
+    parser = argparse.ArgumentParser(description="Nexora Samba 4 AD DC Management")
+    parser.add_argument("--rotate-credentials", action="store_true", help="Rotate all passwords for Administrator and domain users")
+    args = parser.parse_args()
+
     print("=" * 70)
     print("  NEXORA TECHNOLOGIES - SAMBA 4 ACTIVE DIRECTORY LAB MANAGER")
     print("  Target Realm: NEXORA.TEST | Domain: NEXORA | Role: Domain Controller")
     print("  Model: Textbook AGDLP (Accounts -> Global -> Domain Local -> Perms)")
+    if args.rotate_credentials:
+        print("  Action: Full Active Directory Credential Rotation")
     print("=" * 70)
 
     # 1. Load or generate unique credentials per user
-    creds = load_or_create_credentials()
-    print(f"[INIT] Loaded unique credentials register for Administrator and {len(USER_DEFS)} domain users.")
+    creds = load_or_create_credentials(force_rotate=args.rotate_credentials)
+    if args.rotate_credentials:
+        print(f"[ROTATE] Generated fresh unique credentials for Administrator and {len(USER_DEFS)} domain users.")
+    else:
+        print(f"[INIT] Loaded unique credentials register for Administrator and {len(USER_DEFS)} domain users.")
     print(f"[INIT] Local credential store secured via OS ACLs: {CREDENTIALS_FILE}")
 
     # 2. Inspect existing environment
@@ -571,7 +590,7 @@ SMB_CONFIG
     print("\n--> [Step 4/5] Auditing & Purging Stale DNS Registrations...")
     dns_cleanup_script = """
     python3 - << 'PY_DNS'
-import subprocess, re, sys
+import subprocess, re, sys, socket
 
 # 1. Retrieve current eth0 IPv4 address
 try:
@@ -666,7 +685,7 @@ PY_DNS
 
     echo -e "\\n=== DNS SRV TARGET HOSTNAME A RECORD RESOLUTION ===" >> "$OUT"
     TARGET_HOST=$(dig @::1 _ldap._tcp.nexora.test SRV +short | awk '{print $4}' | sed 's/\\.$//')
-    dig @::1 "$TARGET_HOST" A +short | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/<REDACTED_WSL_IP>/' >> "$OUT" 2>&1
+    dig @::1 "$TARGET_HOST" A +short | sed -E 's/^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/<REDACTED_WSL_IP>/' >> "$OUT" 2>&1
 
     # Extract credentials for testing from vault directory
     python3 - << 'PY_AUTH_PREP'
@@ -691,6 +710,14 @@ PY_AUTH_PREP
     cat "$VAULT_DIR/alex_pass" | kinit alex.chen@NEXORA.TEST >/dev/null 2>&1
     klist >> "$OUT" 2>&1
     rm -f "$VAULT_DIR/alex_pass"
+
+    echo -e "\\n=== VERIFY PREVIOUS STATIC CREDENTIAL REJECTED ===" >> "$OUT"
+    if echo "Nexora#Nov2024!" | kinit alex.chen@NEXORA.TEST >/dev/null 2>&1; then
+        echo "[SECURITY FAILURE] Previous static password still authenticates!" >> "$OUT"
+        exit 1
+    else
+        echo "Previous static password rejected (Pre-authentication failed as expected)." >> "$OUT"
+    fi
 
     echo -e "\\n=== SMB SHARES DISCOVERY ===" >> "$OUT"
     smbclient -L localhost -A "$VAULT_DIR/auth_it" 2>&1 | grep -E "Disk|IPC" >> "$OUT" 2>&1

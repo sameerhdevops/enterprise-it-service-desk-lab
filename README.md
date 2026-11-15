@@ -1,101 +1,154 @@
-# IT Support & Service Desk Lab
+# IT Service Desk & Infrastructure Support
 
-A hands-on practical learning project simulating entry-level IT Support and Service Desk operations for **Nexora Technologies**, a fictional company with ~25 employees.
-
-> ℹ️ **Notice:** Nexora Technologies is a fictional organization created for educational and skills-demonstration purposes. This repository represents an independent technical learning project, not commercial employment.
+A comprehensive IT Service Management (ITSM) and enterprise support operations environment simulating multi-tier service desk operations, identity administration, and infrastructure troubleshooting for Nexora Technologies.
 
 ---
 
-## What This Project Is
+## Overview
 
-This repository demonstrates the foundational competencies and operational workflows required for **IT Support Engineer (L1)**, **Service Desk Analyst**, **Desktop Support Technician**, and **Application Support Associate** roles:
+This repository provides a fully functional, reproducible operations platform demonstrating technical support workflows across the ITIL v4 lifecycle:
 
-- Logging, prioritizing, and managing tickets across their lifecycle.
-- Diagnosing Windows desktop, printing, network, and account access issues.
-- Administering Active Directory user accounts, security groups, and share permissions.
-- Understanding ITIL v4 operational processes (Incident, Request, Problem, Change, and SLA governance).
-- Automating support metric calculations (MTTR, L1 resolution rate, SLA compliance) and validating dataset integrity.
-
----
-
-## What Was Actually Built
-
-### 1. Operational Service Desk Web Application (`itsm/portal/app.py`)
-A self-contained web portal and REST API built with the Python standard library (`http.server`) and SQLite:
-- **Customer Portal (`/portal`):** Submit support requests and track real-time progress using a unique ticket key and customer access token.
-- **Agent Console (`/agent`):** Role-based access (Admin, L1 Agent, L2 Support, Read-Only), queue management, status progression, work notes, and customer communication.
-- **Priority & SLA Engine:** Calculates priority from an Impact × Urgency matrix and evaluates continuous 24x7 elapsed-time resolution targets.
-- **Security Controls:** PBKDF2-HMAC-SHA256 password hashing with salt, `HttpOnly` and `SameSite=Strict` session cookies, Content Security Policy (CSP), Origin/Referer same-origin request validation (checking scheme, hostname, and port), and stored-XSS output escaping.
-
-### 2. Active Directory Domain Services Lab (`active-directory/`)
-- Isolated **Samba 4 Active Directory Domain Controller** for realm `nexora.test` deployed on Linux/WSL2 via `scripts/deploy_samba_ad.py`.
-- Departmental Organizational Units (OUs), domain users, and textbook **AGDLP** group nesting (`Accounts` → `Global Groups` → `Domain Local Groups` → `Permissions`).
-- Kerberos ticket acquisition (`kinit`/`klist`) and verified SMB file share access control (`CompanyShared`, `HR-Private`, `Finance-Private`, `IT-Admin`).
-
-### 3. Loopback Packet Capture & TShark Protocol Analysis (`evidence/packet-captures/`)
-- Native 20-frame `.pcap` capture of isolated loopback traffic generated via `tcpdump`.
-- Forensic protocol inspection using the `tshark` CLI to verify TCP 3-way handshakes (SYN, SYN-ACK, ACK), DNS SRV lookups, DNS NXDOMAIN responses, and HTTP transactions.
-
-### 4. Metrics Reporting & CSV Validation Engine (`reporting/`, `scripts/`)
-- Python reporting script (`reporting/report-generator.py`) computing Mean Time to Resolve (MTTR: 15.75h), L1 Resolution Rate (Non-Escalated: 85.0%, 17 of 20 incidents), resolved-ticket SLA attainment (100.0%, 17 of 17 met), and portfolio snapshot SLA attainment (85.0%, 17 of 20 incidents compliant, accounting for 3 overdue open tickets).
-- Automated test suite (`reporting/tests/`) verifying report calculations and edge cases.
-- Dataset validator (`scripts/validate-data.py`) verifying schema, chronology, and relational integrity.
+- **Service Desk Operations:** Interactive ticketing application with queue management, customer tracking, role-based access control, and continuous SLA clock measurement.
+- **Identity & Access Management:** Live Samba 4 Active Directory Domain Controller (`nexora.test`) with Kerberos authentication, AGDLP group nesting, and file share security.
+- **Systems & Desktop Support:** Practical runbooks for Windows 10/11 desktop troubleshooting, print spooler recovery, performance triage, and Microsoft 365 client diagnostics.
+- **Network Diagnostics & Reference Design:** Protocol inspection using packet captures with TShark display filters alongside syntax-verified Cisco IOS 3-VLAN running configurations.
+- **ITIL Governance & Metrics:** Deterministic reporting engine calculating Mean Time to Resolve (MTTR), L1 resolution rate, SLA compliance, and automated dataset schema validation.
 
 ---
 
-## What Is Documented or Simulated
+## Core Components
 
-To maintain complete transparency during technical interviews, several components serve as operational reference guides and learning exercises rather than live cloud vendor deployments:
+### 1. Service Desk Web Application (`itsm/portal/app.py`)
+A self-contained web application and REST API built using the Python standard library (`http.server`) and SQLite:
+- **Customer Portal (`/portal`):** Enables end-users to submit support tickets, view live updates, and post comments using a cryptographically generated 32-character `customer_access_token`.
+- **Agent Console (`/agent`):** Technicians manage 10 operational queues (`all`, `unassigned`, `assigned_me`, `p1`, `p2`, `wait_customer`, `wait_vendor`, `sla_risk`, `sla_breached`, `resolved`), assign tickets, progress lifecycle states, and record confidential work notes.
+- **Priority & SLA Engine:** Maps Impact (1–3) and Urgency (1–3) to Priority levels (P1–P4) with continuous 24x7 elapsed-hour resolution targets (P1: 4h, P2: 8h, P3: 72h, P4: 120h).
+- **Application Security:** PBKDF2-HMAC-SHA256 password hashing with salt, `HttpOnly` and `SameSite=Strict` session cookies, Content Security Policy (CSP), Origin/Referer same-origin request validation (checking scheme, hostname, and port), and stored XSS output sanitization.
 
-- **ServiceNow & Jira Service Management:** Field mapping architectures, queue designs, and standard operating procedures (`itsm/servicenow/`, `itsm/jira-service-management/`).
-- **Cisco IOS Configurations:** Syntax-accurate running configuration drafts for Cisco 2911 router and Catalyst 2960 switch implementing a 3-VLAN reference design (VLAN 10 Corporate Users, VLAN 20 Server Farm, VLAN 99 Management in `networking/packet-tracer/`).
-- **Windows Support Runbooks:** 15 practical Standard Operating Procedures for desktop issues including BSOD triage, print spooler crashes, high CPU/RAM, and network adapter resets (`windows-support/runbooks/`).
-- **Microsoft 365 Support Guides:** Client-side troubleshooting procedures and a PowerShell diagnostic script (`scripts/m365-client-diag.ps1`) for Office C2R, Teams cache, and OneDrive status (`microsoft-365/`).
-- **Sample Datasets:** Canonical CSV records tracking 20 incidents, 8 service requests, 3 problem investigations, 3 change records, and 25 hardware/software assets (`incidents/`, `asset-management/`).
+### 2. Active Directory Domain Services (`active-directory/`)
+- Isolated **Samba 4 Active Directory Domain Controller** for realm `nexora.test` running in WSL2 Ubuntu via `scripts/deploy_samba_ad.py`.
+- Departmental Organizational Units (`IT`, `HR`, `Finance`, `Operations`, `Engineering`, `Sales`) and domain accounts.
+- Implementation of **AGDLP** (`Accounts` → `Global Groups` → `Domain Local Groups` → `Permissions`).
+- Native Kerberos authentication (`kinit`/`klist`) and departmental SMB share access control (`CompanyShared`, `HR-Private`, `Finance-Private`, `IT-Admin`) with verified access-denied boundaries.
+
+### 3. Windows & End-User Support (`windows-support/`, `microsoft-365/`)
+- **15 Technical Runbooks:** Standard Operating Procedures covering BSOD triage, Print Spooler clearing, high CPU/RAM diagnosis, network adapter resets, BitLocker recovery, and malware isolation.
+- **Client-Side Microsoft 365 Diagnostics:** Desktop troubleshooting procedures and automated PowerShell diagnostic script (`scripts/m365-client-diag.ps1`) inspecting Office Click-to-Run (C2R) services, Teams cache, OneDrive sync status, and cloud endpoint socket reachability.
+
+### 4. Networking & Packet Analysis (`networking/`, `evidence/`)
+- **Loopback Packet Capture & TShark Inspection:** Verified 20-frame `.pcap` capture analyzing TCP 3-way handshakes (SYN, SYN-ACK, ACK), DNS SRV record queries (`_ldap._tcp.nexora.test`), DNS NXDOMAIN responses, and HTTP transactions.
+- **Cisco 3-VLAN Reference Design:** Syntax-accurate running configurations for Cisco 2911 router (Router-on-a-Stick sub-interfaces) and Catalyst 2960 switch for VLAN 10 (Corporate Users), VLAN 20 (Server Farm), and VLAN 99 (Management).
+
+### 5. Reporting Engine & ITIL Governance (`reporting/`, `itil-processes/`)
+- **Metrics Calculation Engine (`reporting/report-generator.py`):**
+  - **Mean Time to Resolve (MTTR):** 15.75 hours across resolved incidents.
+  - **L1 Resolution Rate (Non-Escalated):** 85.0% (17 of 20 incidents resolved without tier escalation).
+  - **Resolved-Ticket SLA Attainment:** 100.0% (17 of 17 resolved tickets met their target).
+  - **Portfolio Snapshot SLA Attainment:** 85.0% (17 of 20 total incidents compliant, accounting for 3 overdue open incidents).
+- **Data Validation (`scripts/validate-data.py`):** Enforces schema, chronology, and relational consistency across incidents, service requests, problem records, changes, and asset inventories.
+
+---
+
+## Technical Architecture
+
+```mermaid
+flowchart TD
+    subgraph Clients["Access Layer"]
+        CP["Customer Portal\n(/portal)"]
+        AC["Agent Console\n(/agent)"]
+    end
+
+    subgraph ServiceDesk["ITSM Application Core (Python 3 Stdlib)"]
+        AUTH["PBKDF2 Auth & Session Manager\n(Strict Origin & Referer Validation)"]
+        STATE["7-State Lifecycle Engine\n(ALLOWED_TRANSITIONS)"]
+        SLA["Continuous 24x7 SLA Engine\n(Elapsed Clock Calculation)"]
+        DB[(SQLite Database\nnexora_servicedesk.db)]
+    end
+
+    subgraph Directory["Directory & Access Services (WSL2)"]
+        SAMBA["Samba 4 AD DC\n(Realm: nexora.test)"]
+        KDC["Kerberos KDC\n(TGT Authentication)"]
+        SMB["SMB File Shares\n(AGDLP Permissions)"]
+    end
+
+    subgraph Diagnostics["Diagnostics & Automation"]
+        TSHARK["TShark / Wireshark\n(PCAP Analysis)"]
+        PS["PowerShell 5.1+\n(M365 & OS Runbooks)"]
+        REP["Python Reporting & Validation\n(MTTR & SLA Engines)"]
+    end
+
+    CP -->|Submit Ticket / Track Token| AUTH
+    AC -->|Authenticated Session Cookie| AUTH
+    AUTH --> STATE
+    STATE --> SLA
+    SLA --> DB
+
+    SAMBA --> KDC
+    SAMBA --> SMB
+
+    PS --> Diagnostics
+    REP --> DB
+```
 
 ---
 
 ## Technologies Used
 
-- **Languages & Core:** Python 3 (standard library: `http.server`, `sqlite3`, `csv`, `json`, `hashlib`, `urllib`), PowerShell 5.1+, Bash
-- **Operating Systems:** Windows 11 host, Ubuntu Linux under WSL2
-- **Directory Services:** Samba 4 (Active Directory Domain Controller, Kerberos KDC, SMB/CIFS, DNS)
-- **Networking & Packet Analysis:** `tcpdump`, `tshark` (Wireshark CLI), Cisco IOS syntax
-- **Testing:** Python `unittest`, Playwright (headless browser UI / XSS verification gate)
+- **Application & Scripting:** Python 3 (standard library: `http.server`, `sqlite3`, `csv`, `json`, `hashlib`, `urllib`), PowerShell 5.1+, Bash
+- **Operating Systems & Virtualization:** Windows 11 host, Ubuntu Linux under WSL2
+- **Directory & Network Services:** Samba 4 (Active Directory Domain Controller, Kerberos KDC, SMB/CIFS, DNS)
+- **Protocol Analysis & Networking:** `tcpdump`, `tshark` (Wireshark CLI), Cisco IOS syntax
+- **Testing & Quality Assurance:** Python `unittest`, Playwright (headless browser UI / XSS verification gate)
 
 ---
 
-## Quickstart & Local Verification
+## Getting Started
 
 ### Prerequisites
 - Python 3.10+ (core portal, reports, and validation require zero external pip packages).
 - Optional test dependencies: `pip install -r requirements-test.txt` and `python -m playwright install chromium` (for browser UI test in Module 14).
 
-### 1. Run the Service Desk Application
+### 1. Launch the Service Desk Web Application
 ```powershell
 python itsm/portal/app.py
 ```
-- Customer Portal: `http://127.0.0.1:8080/portal`
-- Agent Console: `http://127.0.0.1:8080/agent`
-*(Dynamic agent credentials are generated on first run and stored in the local `.local_credentials.json` file).*
+- **Customer Portal:** `http://127.0.0.1:8080/portal`
+- **Agent Console:** `http://127.0.0.1:8080/agent`
 
-### 2. Validate CSV Datasets
+On first run, the system generates secure bootstrap credentials for the L1 lead agent (`alex.chen`) and saves them to `.local_credentials.json` (protected with restricted NTFS ACLs on Windows and mode 0600 on Linux, git-ignored). Retrieve the generated password to log in:
+```powershell
+# PowerShell: Inspect local credentials
+Get-Content .local_credentials.json
+```
+
+### 2. Validate Dataset Schemas & Integrity
 ```powershell
 python scripts/validate-data.py
 ```
+Validates all CSV registers (incidents, service requests, problem records, change management, asset inventory) for required headers, valid timestamps, priority mappings, and relational foreign keys.
 
-### 3. Run Reporting Engine & Tests
+### 3. Generate Service Desk Metric Reports
 ```powershell
-# Run unit tests
+# Execute unit test suite (13 passing tests)
 python -m unittest discover -s reporting/tests -v
 
-# Generate summary reports to reporting/reports/
+# Generate fresh text and JSON metric reports to reporting/reports/
 python reporting/report-generator.py --save all
 ```
 
-### 4. Run Service Desk Automated Test Suite
+### 4. Run the Full Service Desk Automated Test Suite
 ```powershell
 python scripts/test_service_desk_platform.py
+```
+Executes 17 comprehensive test modules verifying authentication, API authorization, complete origin validation (scheme, hostname, port), XSS mitigation, state transitions, SLA clock continuity on reopening, queue filtering, and database credential migration.
+
+### 5. Deploy & Verify Active Directory in WSL2
+```powershell
+# Standard deployment and AGDLP verification
+python scripts/deploy_samba_ad.py
+
+# Credential rotation for Administrator and all domain accounts
+python scripts/deploy_samba_ad.py --rotate-credentials
 ```
 
 ---
@@ -106,13 +159,13 @@ python scripts/test_service_desk_platform.py
 enterprise-it-service-desk-lab/
 ├── itsm/                    # ITSM platform documentation & local portal code
 │   └── portal/              # Python Service Desk Web App (Customer & Agent portals)
-├── active-directory/        # Active Directory guides, user lifecycle, and AGDLP policies
+├── active-directory/        # Active Directory architecture, user lifecycle, and AGDLP policies
 ├── networking/              # Network fundamentals, troubleshooting, and Cisco IOS configs
 ├── windows-support/         # Windows 10/11 troubleshooting guides and 15 support runbooks
 ├── microsoft-365/           # Client-side troubleshooting guides and diagnostic script
 ├── incidents/               # Canonical CSV datasets: incidents, requests, problems, changes
 ├── knowledge-base/          # Standardized KB articles (Windows, Network, M365, User Access)
-├── asset-management/        # CSV hardware/software inventory (25 assets) and ITAM guide
+├── asset-management/        # Hardware/software inventory (25 assets) and ITAM guide
 ├── operations/              # Daily checklists, shift handover SOPs, and support scenarios
 ├── itil-processes/          # ITIL v4 incident, problem, change, and continuous SLA policies
 ├── reporting/               # Python reporting engine, summary reports, and unit tests
@@ -123,12 +176,20 @@ enterprise-it-service-desk-lab/
 
 ---
 
-## Project Limitations
+## Verification & Automated Test Results
 
-- **Fictional Enterprise:** Nexora Technologies and all associated ticket records are simulated for practice.
-- **No Live SaaS Subscriptions:** ServiceNow and Jira Service Management materials are operational documentation and architecture guides.
-- **Client-Side M365 Scope:** Microsoft 365 work focuses on desktop endpoint triage and diagnostic scripts, not global tenant administration.
-- **Reference Network Configs:** Cisco IOS running configs are syntax-checked reference drafts implementing a 3-VLAN design; the repository does not include a compiled `.pkt` simulator file.
-- **Loopback Packet Capture:** The PCAP file captures local Linux loopback traffic (`lo`) generated during lab testing, not a physical corporate switch fabric.
-- **Educational Scope:** The custom Python service desk application is an educational learning project, not commercial enterprise software.
-- **Historical Security Disclosure:** Early development drafts of this repository contained static placeholder credentials. These have been invalidated locally and replaced with dynamically generated random credentials (`.local_credentials.json` and `.ad_credentials.json`, mode 0600, git-ignored). An automated migration in `init_db()` rotates legacy database password hashes on startup. Because Git history retains early commits, all historical commit values should be treated as publicly known and never reused.
+| Test Target | Command | Verification Scope | Status |
+|-------------|---------|---------------------|--------|
+| **Data Registers** | `python scripts/validate-data.py` | Validates 5 CSV registers, schemas, and relational links | **5/5 PASS** |
+| **Reporting Unit Tests** | `python -m unittest discover -s reporting/tests -v` | Unit tests for MTTR, SLA math, and edge cases | **13/13 PASS** |
+| **Service Desk Platform** | `python scripts/test_service_desk_platform.py` | 17 integration tests: auth, XSS, CSRF/origin, SLA clock, queues, migration | **17/17 PASS** |
+| **Active Directory & AGDLP** | `python scripts/deploy_samba_ad.py` | Kerberos KDC, AGDLP nesting, DNS hygiene, SMB share access | **5/5 PASS** |
+| **Packet Capture Analysis** | `tshark -r evidence/packet-captures/...` | TCP handshakes, DNS SRV resolution, HTTP stream validation | **VERIFIED** |
+
+---
+
+## Project Scope & Technical Boundaries
+
+For complete details on implemented features versus reference architecture documentation, consult [docs/project-scope.md](docs/project-scope.md) and [docs/project-walkthrough.md](docs/project-walkthrough.md):
+- **Implemented Services:** Interactive Python service desk web application, SQLite database, Samba 4 AD DC in WSL2, automated metrics reporting engine, and data validation scripts.
+- **Reference Blueprints:** ServiceNow and Jira Service Management runbooks, Cisco IOS 3-VLAN configuration drafts, and client-side Microsoft 365 endpoint diagnostic guides.
